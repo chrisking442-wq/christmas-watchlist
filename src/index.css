@@ -1,0 +1,118 @@
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+.wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+h1 { margin: 0 0 6px; font-size: 28px; }
+.sub { margin: 0 0 16px; color: #666; font-size: 14px; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.controls select, .controls input, .controls button {
+  padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; background: #fff; color: #111;
+}
+.controls .file input { display: none; }
+.controls .file span { display: inline-block; padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; background: #f6f6f6; cursor: pointer; }
+.controls .search { min-width: 260px; }
+.tableWrap { border: 1px solid #ddd; border-radius: 12px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+thead th { position: sticky; top: 0; background: #fafafa; text-align: left; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; white-space: nowrap; }
+thead th .thInner { display: flex; align-items: center; gap: 6px; }
+tbody td { padding: 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+tbody tr:hover td { background: #fffdf3; }
+a { color: #0A66C2; text-decoration: underline; }
+.note { opacity: 0.7; margin-top: 16px; }
+footer { margin: 16px 0 40px; font-size: 12px; color: #666; }
+/* --- CARD VIEW STYLES --- */
+.warn { background:#fff3cd; color:#7a5d00; border:1px solid #ffe69c; padding:8px 10px; border-radius:8px; display:inline-block; margin:6px 0 10px; }
+.spacer { flex:1; }
+.toggle label { margin-right:10px; cursor:pointer; }
+.grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:14px; }
+.card { display:flex; gap:12px; border:1px solid #eaeaea; border-radius:12px; padding:12px; background:#fff; align-items: flex-start; }
+.posterWrap { flex:0 0 auto; }
+.info { flex:1; min-width:0; }
+.title { font-weight:700; margin-bottom:4px; }
+.year { font-weight:500; color:#666; }
+.pill { display:inline-block; background:#eef5ff; color:#0a53be; padding:2px 8px; border-radius:999px; font-size:12px; margin:3px 0 6px; }
+.meta { font-size:12px; color:#666; margin-bottom:6px; }
+.cast, .synopsis { font-size:13px; color:#333; }
+.synopsis { margin-top:4px; line-height:1.4; }
+.actions { display:flex; align-items:center; gap:8px; margin-left:auto; }
+.btn { display:inline-block; padding:8px 10px; border:1px solid #ccc; border-radius:8px; background:#f6f6f6; color:#111; text-decoration:none; }
+.btn:hover { background:#ececec; }
+/* --- Modal overlay --- */
+.modalBackdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 1000;
+}
+.modal {
+  width: min(100%, 980px); max-height: 88vh; overflow: auto;
+  background: #fff; color: #111; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+.modalHeader { display:flex; justify-content: space-between; align-items:center; padding:12px 14px; border-bottom:1px solid #eee; }
+.modalBody { padding: 14px; }
+.modalFooter { padding: 10px 14px; border-top: 1px solid #eee; display:flex; justify-content:flex-end; gap:8px; }
+.closeBtn { border:1px solid #ddd; background:#f7f7f7; border-radius:8px; padding:4px 10px; cursor:pointer; }
+.addedTag { display:inline-block; background:#e6f7e6; color:#0d7a0d; border:1px solid #b7e3b7; border-radius:8px; padding:4px 8px; }
+
+/* Keep existing card/table styles you already have */
+/* Make all our buttons feel clickable */
+.btn, .controls button, .closeBtn { cursor: pointer; }
+
+/* Modal little toolbar */
+.modalToolbar { display:flex; gap:8px; align-items:center; padding: 10px 14px; border-bottom:1px solid #eee; }
+.modalToolbar .search { min-width: 260px; }
+
+/* (You already have .modalBackdrop/.modal etc. from earlier code) */
+.btn, .controls button, .closeBtn { cursor: pointer; }
+.btn-danger { border:1px solid #f3c1c1; background:#ffe9e9; }
+/* Keep card content from overlapping */
+.card { display: grid; grid-template-columns: 152px 1fr; gap: 12px; align-items: start; }
+.card .posterWrap { grid-column: 1 / 2; }
+.card .info { grid-column: 2 / 3; }
+.card .actions { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.card .title { line-height: 1.25; margin-bottom: 4px; }
+.btn, .controls button, .closeBtn { cursor: pointer; }
+.btn-danger { border:1px solid #f3c1c1; background:#ffe9e9; }
+.card { display: grid; grid-template-columns: 152px 1fr; gap: 12px; align-items: start; }
+.card .posterWrap { grid-column: 1 / 2; }
+.card .info { grid-column: 2 / 3; }
+.card .actions { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.card .title { line-height: 1.25; margin-bottom: 4px; }
+.btn, .controls button, .closeBtn { cursor: pointer; }
+.btn-danger { border:1px solid #f3c1c1; background:#ffe9e9; }
+
+.modalBackdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; padding:16px; z-index:1000; }
+.modal { width:min(100%,980px); max-height:88vh; overflow:auto; background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
+.modalHeader { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid #eee; }
+.modalToolbar { display:flex; gap:8px; align-items:center; padding:10px 14px; border-bottom:1px solid #eee; }
+.modalBody { padding:14px; }
+.modalFooter { padding:10px 14px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; }
+.addedTag { display:inline-block; background:#e6f7e6; color:#0d7a0d; border:1px solid #b7e3b7; border-radius:8px; padding:4px 8px; }
+/* Progress bar */
+.progressBar {
+  position: sticky; top: 0; z-index: 1000;
+  background: #fff; border-bottom: 1px solid #eee;
+  padding: 6px 10px; display: flex; align-items: center; gap: 10px;
+}
+.progressBar .progressFill {
+  height: 6px; background: #2f80ed; border-radius: 4px;
+  transition: width 0.2s ease;
+  flex: 0 0 auto; width: 0;
+}
+.progressBar .progressText { font-size: 12px; color: #555; }
+
+/* Loading state on the button (simple spinner) */
+.btn.loading { position: relative; padding-left: 32px; }
+.btn.loading::before {
+  content: ""; position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; border: 2px solid #999; border-top-color: transparent; border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+/* Toast */
+.toast {
+  position: fixed; right: 14px; bottom: 14px; z-index: 1000;
+  background: #1f2937; color: white; padding: 10px 14px; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2); cursor: pointer;
+}
+.toast.ok { background: #0f766e; }  /* green-ish */
+
