@@ -1,18 +1,12 @@
 import React from "react";
-import "./App.css"; // keep your app styles
-// import "./index.css"; // only if you actually have this
-
-// ---------- ENV / SUPABASE ----------
-import { createClient } from "@supabase/supabase-js";
-const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const supabase = SUPA_URL && SUPA_KEY ? createClient(SUPA_URL, SUPA_KEY) : null;
+import "./App.css"; // keep your styles
+// import "./index.css"; // only if you have it
 
 // ---------- CONSTANTS ----------
-const LS = { sheets: "cw_sheets", sheetName: "cw_sheetName", tab: "cw_tab", code: "cw_code" };
+const LS = { sheets: "cw_sheets", sheetName: "cw_sheetName", tab: "cw_tab" };
 const DEFAULT_SHEET = "Default";
 const DEFAULT_TAB = "FILM";
-const FALLBACK_CODE = "PMR9EE"; // <- your default sheet code
+const FALLBACK_CODE = "PMR9EE"; // your default code
 
 // ---------- HELPERS ----------
 const norm = (s) => (s || "").trim().toLowerCase();
@@ -27,7 +21,7 @@ const normalizeFilm = (x) => ({
   type: x.type || "film",
 });
 
-// Optional: OMDb search if you add VITE_OMDB_KEY in env
+// optional: OMDb search if you add VITE_OMDB_KEY
 async function searchOmdb(query) {
   const key = import.meta?.env?.VITE_OMDB_KEY;
   if (!key || !query) return [];
@@ -45,16 +39,31 @@ async function searchOmdb(query) {
   }
 }
 
+// try a global loader if your project defines window.loadFromCloud(code)
+async function tryGlobalCloudLoad(code) {
+  try {
+    if (typeof window !== "undefined" && typeof window.loadFromCloud === "function") {
+      const res = await window.loadFromCloud(code);
+      if (res?.items && res?.name) return res;
+      if (res && typeof res === "object") {
+        const name = Object.keys(res)[0] || DEFAULT_SHEET;
+        return { name, items: Array.isArray(res[name]) ? res[name] : [] };
+      }
+    }
+  } catch (e) {
+    console.warn("window.loadFromCloud failed:", e);
+  }
+  return null;
+}
+
 export default function App() {
-  // ---------- STATE ----------
   const [sheets, setSheets] = React.useState({});
   const [sheetName, setSheetName] = React.useState(DEFAULT_SHEET);
   const [tab, setTab] = React.useState(() => localStorage.getItem(LS.tab) || DEFAULT_TAB);
   const [loading, setLoading] = React.useState(true);
   const [loadError, setLoadError] = React.useState(null);
-  const [cloudCode, setCloudCode] = React.useState(() => localStorage.getItem(LS.code) || "");
 
-  // ---------- LOCAL PERSIST ----------
+  // restore local
   React.useEffect(() => {
     try {
       const savedSheets = localStorage.getItem(LS.sheets);
@@ -66,126 +75,81 @@ export default function App() {
     } catch {}
     setLoading(false);
   }, []);
-  React.useEffect(() => {
-    try { localStorage.setItem(LS.sheets, JSON.stringify(sheets)); } catch {}
-  }, [sheets]);
-  React.useEffect(() => {
-    if (sheetName) try { localStorage.setItem(LS.sheetName, sheetName); } catch {}
-  }, [sheetName]);
-  React.useEffect(() => {
-    try { localStorage.setItem(LS.tab, tab); } catch {}
-  }, [tab]);
-  React.useEffect(() => {
-    try { if (cloudCode) localStorage.setItem(LS.code, cloudCode); } catch {}
-  }, [cloudCode]);
 
-  // ---------- SUPABASE CLOUD LOAD (your original behaviour) ----------
-  async function loadFromCloud(codeArg) {
-    if (!supabase) {
-      console.warn("Supabase not configured (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
-      return false;
-    }
-    const codeToUse = (codeArg || cloudCode || "").toUpperCase();
-    if (!codeToUse) return false;
+  // persist
+  React.useEffect(() => { try { localStorage.setItem(LS.sheets, JSON.stringify(sheets)); } catch {} }, [sheets]);
+  React.useEffect(() => { if (sheetName) try { localStorage.setItem(LS.sheetName, sheetName); } catch {} }, [sheetName]);
+  React.useEffect(() => { try { localStorage.setItem(LS.tab, tab); } catch {} }, [tab]);
 
-    const { data, error } = await supabase
-      .from("watchlists")
-      .select("*")
-      .eq("code", codeToUse)
-      .single();
-
-    if (error || !data) {
-      console.warn("Cloud list not found for code:", codeToUse, error?.message);
-      return false;
-    }
-
-    const incoming = data.data || {};
-    const first = Object.keys(incoming || {})[0] || DEFAULT_SHEET;
-
-    // normalize items
-    const normalized = Object.fromEntries(
-      Object.entries(incoming).map(([k, arr]) => [k, (arr || []).map(normalizeFilm)])
-    );
-
-    setSheets(normalized);
-    setSheetName(first);
-    setCloudCode(codeToUse);
-    return true;
-  }
-
-  // ---------- FORCE DEFAULT LOAD ON FIRST VISIT ----------
+  // code from URL or env or fallback
   const getUrlCode = React.useCallback(() => {
     try {
       const sp = new URLSearchParams(window.location.search);
       return (sp.get("code") || "").toUpperCase();
-    } catch {
-      return "";
-    }
+    } catch { return ""; }
   }, []);
 
+  // force default load on first visit (using your global loader if present)
   React.useEffect(() => {
     (async () => {
       const fromUrl = getUrlCode();
       const fromEnv = (import.meta.env?.VITE_DEFAULT_LOAD_CODE || "").toUpperCase();
       const code = fromUrl || fromEnv || FALLBACK_CODE;
 
-      // Remove any stale local copy so the cloud wins
+      // clear stale local so cloud wins
       try {
         localStorage.removeItem(LS.sheets);
         localStorage.removeItem(LS.sheetName);
       } catch {}
 
-      const ok = await loadFromCloud(code);
-
-      // If cloud load failed for any reason, keep empty (user can use Discover)
-      if (!ok) {
-        setSheets({ [DEFAULT_SHEET]: [] });
-        setSheetName(DEFAULT_SHEET);
-        setLoadError(null); // not fatal for basic usage
+      const res = await tryGlobalCloudLoad(code);
+      if (res) {
+        const list = (res?.items || []).map(normalizeFilm);
+        const name = res?.name || DEFAULT_SHEET;
+        setSheets({ [name]: list });
+        setSheetName(name);
+        setLoadError(null);
+        return;
       }
+
+      // if no global loader / not available, start empty (user can add manually)
+      setSheets({ [DEFAULT_SHEET]: [] });
+      setSheetName(DEFAULT_SHEET);
+      setLoadError(null);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- DERIVED ----------
   const currentList = React.useMemo(() => sheets?.[sheetName] || [], [sheets, sheetName]);
 
-  // ---------- MUTATIONS ----------
-  const addToCurrentList = React.useCallback(
-    (item) => {
-      setSheets((prev) => {
-        const name = sheetName || DEFAULT_SHEET;
-        const current = prev?.[name] ?? [];
-        const film = normalizeFilm(item);
-        const exists = current.some(
-          (f) =>
-            (f.id && film.id && f.id === film.id) ||
-            (norm(f.title) === norm(film.title) && f.year === film.year)
-        );
-        if (exists) return prev;
-        const next = { ...(prev || {}), [name]: [...current, film] };
-        try { localStorage.setItem(LS.sheets, JSON.stringify(next)); } catch {}
-        return next;
-      });
-    },
-    [sheetName]
-  );
+  const addToCurrentList = React.useCallback((item) => {
+    setSheets((prev) => {
+      const name = sheetName || DEFAULT_SHEET;
+      const current = prev?.[name] ?? [];
+      const film = normalizeFilm(item);
+      const exists = current.some(
+        (f) =>
+          (f.id && film.id && f.id === film.id) ||
+          (norm(f.title) === norm(film.title) && f.year === film.year)
+      );
+      if (exists) return prev;
+      const next = { ...(prev || {}), [name]: [...current, film] };
+      try { localStorage.setItem(LS.sheets, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [sheetName]);
 
-  const removeFromCurrentList = React.useCallback(
-    (id) => {
-      setSheets((prev) => {
-        const name = sheetName || DEFAULT_SHEET;
-        const current = prev?.[name] ?? [];
-        const nextList = current.filter((f) => (f.id ?? `${norm(f.title)}-${f.year ?? ""}`) !== id);
-        const next = { ...(prev || {}), [name]: nextList };
-        try { localStorage.setItem(LS.sheets, JSON.stringify(next)); } catch {}
-        return next;
-      });
-    },
-    [sheetName]
-  );
+  const removeFromCurrentList = React.useCallback((id) => {
+    setSheets((prev) => {
+      const name = sheetName || DEFAULT_SHEET;
+      const current = prev?.[name] ?? [];
+      const nextList = current.filter((f) => (f.id ?? `${norm(f.title)}-${f.year ?? ""}`) !== id);
+      const next = { ...(prev || {}), [name]: nextList };
+      try { localStorage.setItem(LS.sheets, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [sheetName]);
 
-  // ---------- UI ----------
   return (
     <div className="app">
       <header className="app-header">
