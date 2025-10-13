@@ -132,18 +132,46 @@ function ProviderLinks({ text }) {
   if (!names.length) return null;
 
   return (
-    <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
-      {names.map((name, i) => {
-        const href = PROVIDER_URL[name] || "";
-        const chipStyle = {
-          fontSize: 12,
-          padding: "2px 8px",
-          borderRadius: 16,
-          background: "#f3f4f6",
-          border: "1px solid #e5e7eb",
-          textDecoration: "none",
-          color: "inherit",
-        };
+  <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+    {names.map((name, i) => {
+      const href = PROVIDER_URL[name] || "";
+      const chipStyle = {
+        fontSize: 12,
+        padding: "2px 8px",
+        borderRadius: 16,
+        background: "#f3f4f6",
+        border: "1px solid #e5e7eb",
+        textDecoration: "none",
+        color: "inherit",
+        display: "inline-block"
+      };
+
+      if (!href) {
+        return <span key={name + i} style={chipStyle}>{name}</span>;
+      }
+
+      return (
+        <a
+          key={name + i}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={chipStyle}
+          onClick={(e) => {
+            // If user is cmd/ctrl-clicking or opening via context menu, let it behave normally.
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+            // Otherwise prefer the app (mobile) with fallback to web in a new tab.
+            e.preventDefault();
+            openProvider(name, href);
+          }}
+        >
+          {name}
+        </a>
+      );
+    })}
+  </span>
+);
+
         return href ? (
           <a key={name + i} href={href} target="_blank" rel="noreferrer" style={chipStyle}>
             {name}
@@ -154,6 +182,77 @@ function ProviderLinks({ text }) {
       })}
     </span>
   );
+}
+/* Optional: prefer opening the native app (mobile) and fall back to web */
+const PREFER_APP_LINKS = true;
+
+/* Known (best-effort) app URL schemes. These can change by platform/version. */
+const PROVIDER_APP_SCHEME = {
+  "Netflix":       "nflx://www.netflix.com",
+  "Disney+":       "disneyplus://",
+  "Prime Video":   "primevideo://",
+  "Apple TV+":     "videos://",           // iOS Videos / TV app; may vary
+  "Paramount+":    "paramountplus://",
+  "NOW":           "nowtv://",
+  "Sky (Sky Go)":  "skygo://",
+  "BBC iPlayer":   "bbciplayer://",
+  "ITVX":          "itv://",
+  "Channel 4":     "all4://",
+  "My5":           "my5://",
+  "UKTV Play":     "uktvplay://",
+  "Virgin TV Go":  "virgintvgo://",
+  "Hayu":          "hayu://",
+  "YouTube":       "youtube://",
+  "Google Play":   "market://details?id=com.google.android.videos",
+  "Amazon Video":  "primevideo://",
+  "Apple (Store)": "itms-apps://",
+  "Sky Store":     "skystore://",
+};
+
+/**
+ * Try to open a native app (mobile) then fall back to web in a new tab.
+ * - On iOS/Android this often hands off to the installed app.
+ * - On desktop, or if blocked, we just open the web url in a new tab.
+ */
+function openProvider(name, webUrl) {
+  const ua = (typeof navigator !== "undefined" ? navigator.userAgent || "" : "");
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
+  const scheme = PROVIDER_APP_SCHEME[name];
+
+  // If we’re not preferring apps or have no scheme, just open the site.
+  if (!PREFER_APP_LINKS || !scheme) {
+    window.open(webUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  // Mobile best-effort: try app scheme first, then fall back to web.
+  if (isMobile) {
+    let didFallback = false;
+
+    // Create a hidden iframe to attempt the scheme without leaving the page.
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    document.body.appendChild(iframe);
+
+    const timer = setTimeout(() => {
+      // If the app didn’t open, fall back to web in a new tab.
+      didFallback = true;
+      window.open(webUrl, "_blank", "noopener,noreferrer");
+      document.body.removeChild(iframe);
+    }, 700);
+
+    try {
+      iframe.src = scheme;
+    } catch {
+      // If setting the scheme fails, fall back immediately.
+      clearTimeout(timer);
+      if (!didFallback) window.open(webUrl, "_blank", "noopener,noreferrer");
+      try { document.body.removeChild(iframe); } catch {}
+    }
+  } else {
+    // Desktop: most apps won’t be registered, open web in a new tab.
+    window.open(webUrl, "_blank", "noopener,noreferrer");
+  }
 }
 
 
