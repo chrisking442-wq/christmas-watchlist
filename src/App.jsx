@@ -100,6 +100,63 @@ function mapProvidersGB(json) {
 const movieProvidersGB = async (id) => mapProvidersGB(await tmdb(`/movie/${id}/watch/providers`));
 const tvProvidersGB = async (id) => mapProvidersGB(await tmdb(`/tv/${id}/watch/providers`));
 
+/* Clickable provider links (web URLs; most devices will hand off to the app if installed) */
+const PROVIDER_URL = {
+  "Netflix": "https://www.netflix.com/gb/",
+  "Disney+": "https://www.disneyplus.com/en-gb/home",
+  "Prime Video": "https://www.primevideo.com/",
+  "Apple TV+": "https://tv.apple.com/gb",
+  "Paramount+": "https://www.paramountplus.com/gb/",
+  "NOW": "https://www.nowtv.com/",
+  "Sky (Sky Go)": "https://www.sky.com/watch/sky-go",
+  "BBC iPlayer": "https://www.bbc.co.uk/iplayer",
+  "ITVX": "https://www.itv.com/watch",
+  "Channel 4": "https://www.channel4.com/",
+  "My5": "https://www.channel5.com/my5",
+  "UKTV Play": "https://uktvplay.co.uk/",
+  "Virgin TV Go": "https://virgintvgo.virginmedia.com/",
+  "Hayu": "https://www.hayu.com/",
+  "YouTube": "https://www.youtube.com/",
+  "Google Play": "https://play.google.com/store/movies",
+  "Amazon Video": "https://www.amazon.co.uk/gp/video/storefront",
+  "Apple (Store)": "https://tv.apple.com/",
+  "Sky Store": "https://www.skystore.com/",
+};
+
+/* Render a comma-separated provider string as clickable links */
+function ProviderLinks({ text }) {
+  const names = (text || "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (!names.length) return null;
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+      {names.map((name, i) => {
+        const href = PROVIDER_URL[name] || "";
+        const chipStyle = {
+          fontSize: 12,
+          padding: "2px 8px",
+          borderRadius: 16,
+          background: "#f3f4f6",
+          border: "1px solid #e5e7eb",
+          textDecoration: "none",
+          color: "inherit",
+        };
+        return href ? (
+          <a key={name + i} href={href} target="_blank" rel="noreferrer" style={chipStyle}>
+            {name}
+          </a>
+        ) : (
+          <span key={name + i} style={chipStyle}>{name}</span>
+        );
+      })}
+    </span>
+  );
+}
+
+
 /* IMDb direct URLs with cache */
 async function resolveImdbUrl(title, year, preferTV) {
   const key = `${title || ""}__${year || ""}__${preferTV ? "tv" : "movie"}`;
@@ -242,7 +299,7 @@ function CardItem({ row, isTVSheet, onDelete, onToggleWatched, onRefreshProvider
           <div style={{fontWeight:700, lineHeight:1.25, fontSize:16}}>
             {title} {year ? <span style={{opacity:.65, fontWeight:500}}>({year})</span> : null}
           </div>
-          {platformTxt ? <span style={{fontSize:12, padding:"2px 8px", borderRadius:16, background:"#f3f4f6", border:"1px solid #e5e7eb"}}>{platformTxt}</span> : null}
+          {platformTxt ? <ProviderLinks text={platformTxt} /> : null}
           <label style={{fontSize:13, display:"inline-flex", alignItems:"center", gap:6, marginLeft:"auto"}}>
             <input type="checkbox" checked={watched} onChange={() => onToggleWatched(title, year)} /> I’ve watched it
           </label>
@@ -745,6 +802,13 @@ const addRowToCurrentSheet = async (title, year, kind) => {
                   {filtered.map((row, i) => (
                     <tr key={i} style={{borderBottom:"1px solid #f1f5f9"}}>
                       {headers.map((h) => {
+						  if (h === "Where to Watch (UK)") {
+							  return (
+								<td key={h} style={{padding:"8px 6px"}}>
+								  <ProviderLinks text={(row[h] ?? "").toString()} />
+								</td>
+							  );
+							}
                         if (h === "Actions") {
                           return (
                             <td key={h} style={{padding:"8px 6px", whiteSpace:"nowrap"}}>
