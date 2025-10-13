@@ -290,6 +290,8 @@ export default function App() {
   const [discover, setDiscover] = useState([]);
   const [isLoadingDiscover, setIsLoadingDiscover] = useState(false);
   const [discoverQuery, setDiscoverQuery] = useState("");
+  const [addingKey, setAddingKey] = useState("");
+
 
   // Progress / toasts
   const [isEnriching, setIsEnriching] = useState(false);
@@ -490,6 +492,86 @@ setSheetName(preferFilm ?? "");
     });
     setToast({ text:"Providers updated.", type:"ok" }); setTimeout(()=>setToast(null), 1500);
   };
+ // Insert immediately, then enrich the same row (runtime, cast, poster, IMDb, Where to Watch)
+const addRowToCurrentSheet = async (title, year, kind) => {
+  return new Promise(async (resolve) => {
+    if (!sheetName) return resolve();
+
+    // 1) Insert a basic row immediately (de-dupe by Title+Year)
+    setSheets(prev => {
+      const next = { ...prev };
+      const cur = next[sheetName] || [];
+      const exists = cur.some(r =>
+        (r.Title || "").trim() === (title || "").trim() &&
+        String(r.Year || "") === String(year || "")
+      );
+      if (exists) return prev;
+
+      const newRow = {
+        Title: title || "",
+        Year: (year || "").toString().slice(0,4),
+        "Where to Watch (UK)": "",
+        "Age Rating": "",
+        "Runtime (min)": "",
+        "Top Cast": "",
+        Synopsis: "",
+        Director: "",
+        Tone: "",
+        "Family Friendliness": "",
+        "Poster URL": "",
+        "IMDb Link": imdbSearchFor(title, year),
+        Watched: false
+      };
+      next[sheetName] = [...cur, newRow];
+      return next;
+    });
+
+    // 2) Enrich from TMDB (if key present); update the same row in place
+    try {
+      let enriched = null;
+      const preferTV = kind === "tv" || /tv|special/i.test(sheetName);
+
+      if (preferTV) {
+        const tv = await tmdbFindTV(title);
+        if (tv) enriched = await buildRowFromTmdbTV(tv);
+        if (!enriched) {
+          const mv = await tmdbFindMovie(title, year);
+          if (mv) enriched = await buildRowFromTmdbMovie(mv);
+        }
+      } else {
+        const mv = await tmdbFindMovie(title, year);
+        if (mv) enriched = await buildRowFromTmdbMovie(mv);
+        if (!enriched) {
+          const tv = await tmdbFindTV(title);
+          if (tv) enriched = await buildRowFromTmdbTV(tv);
+        }
+      }
+
+      if (enriched) {
+        setSheets(prev => {
+          const cur = prev[sheetName] || [];
+          const idx = cur.findIndex(r =>
+            (r.Title || "").trim() === (title || "").trim() &&
+            String(r.Year || "") === String(year || "")
+          );
+          if (idx === -1) return prev;
+          const updated = [...cur];
+          updated[idx] = { ...updated[idx], ...enriched, Watched: !!updated[idx].Watched };
+          return { ...prev, [sheetName]: updated };
+        });
+        setToast({ text: "Added ✓ (enriched)", type: "ok" });
+      } else {
+        setToast({ text: "Added ✓ (basic — TMDB not available)", type: "" });
+      }
+    } catch {
+      setToast({ text: "Added ✓ (basic — couldn’t enrich)", type: "" });
+    } finally {
+      setTimeout(() => setToast(null), 1500);
+      resolve();
+    }
+  });
+};
+ 
 
   /* ====== Enrich (progress UI) ====== */
   const enrichVisible = async () => {
@@ -713,64 +795,213 @@ setSheetName(preferFilm ?? "");
         </div>
       )}
 
-      {/* Discover modal */}
-      {showDiscover && (
-        <div onClick={closeDiscover} style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", padding:16, zIndex:1000}}>
-          <div onClick={(e) => e.stopPropagation()} style={{width:"min(100%,980px)", maxHeight:"88vh", overflow:"auto", background:"#fff", borderRadius:16, boxShadow:"0 10px 30px rgba(0,0,0,0.2)"}}>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 14px", borderBottom:"1px solid #eee"}}>
-              <b>Discover more Christmas films</b>
-              <button onClick={closeDiscover} title="Close" style={{cursor:"pointer", border:"1px solid #e5e7eb", borderRadius:8, padding:"4px 8px"}}>✕</button>
-            </div>
+{/* Discover modal */}
+{showDiscover && (
+  <div
+    onClick={closeDiscover}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.45)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      zIndex: 1000,
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: "min(100%,980px)",
+        maxHeight: "88vh",
+        overflow: "auto",
+        background: "#fff",
+        borderRadius: 16,
+        boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "12px 14px",
+          borderBottom: "1px solid #eee",
+        }}
+      >
+        <b>Discover more Christmas films</b>
+        <button
+          onClick={closeDiscover}
+          title="Close"
+          style={{ cursor: "pointer", border: "1px solid #e5e7eb", borderRadius: 8, padding: "4px 8px" }}
+        >
+          ✕
+        </button>
+      </div>
 
-            <div style={{display:"flex", gap:8, alignItems:"center", padding:"10px 14px", borderBottom:"1px solid #eee", flexWrap:"wrap"}}>
-              <input placeholder="Search titles (e.g., 'The Christmas', hallmark, etc.)"
-                     value={discoverQuery} onChange={(e)=>setDiscoverQuery(e.target.value)}
-                     onKeyDown={(e)=>{ if (e.key === "Enter") searchDiscover(discoverQuery); }}
-                     style={{border:"1px solid #e5e7eb", padding:"8px 12px", borderRadius:10, flex:"1 1 320px"}} />
-              <button onClick={()=>searchDiscover(discoverQuery)} style={{border:"1px solid #c7d2fe", background:"#eef2ff", padding:"8px 12px", borderRadius:10, cursor:"pointer"}}>Search</button>
-            </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          padding: "10px 14px",
+          borderBottom: "1px solid #eee",
+          flexWrap: "wrap",
+        }}
+      >
+        <input
+          placeholder="Search titles (e.g., 'The Christmas', hallmark, etc.)"
+          value={discoverQuery}
+          onChange={(e) => setDiscoverQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") searchDiscover(discoverQuery);
+          }}
+          style={{ border: "1px solid #e5e7eb", padding: "8px 12px", borderRadius: 10, flex: "1 1 320px" }}
+        />
+        <button
+          onClick={() => searchDiscover(discoverQuery)}
+          style={{
+            border: "1px solid #c7d2fe",
+            background: "#eef2ff",
+            padding: "8px 12px",
+            borderRadius: 10,
+            cursor: "pointer",
+          }}
+        >
+          Search
+        </button>
+      </div>
 
-            <div style={{padding:14}}>
-              {isLoadingDiscover && <div>Loading…</div>}
-              {!isLoadingDiscover && !discover.length && <div style={{color:"#666"}}>Type a search and press Enter.</div>}
+      <div style={{ padding: 14 }}>
+        {isLoadingDiscover && <div>Loading…</div>}
+        {!isLoadingDiscover && !discover.length && (
+          <div style={{ color: "#666" }}>Type a search and press Enter.</div>
+        )}
 
-              <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))", gap:12}}>
-                {discover.map((d) => {
-                  const exists = (sheets[sheetName] || []).some(r =>
-                    (r.Title || "").trim() === (d.title || "").trim() &&
-                    String(r.Year || "") === String(d.year || "")
-                  );
-                  return (
-                    <div key={`${d.title}__${d.year}`} style={{display:"grid", gridTemplateColumns:"100px 1fr", gap:12, border:"1px solid #eee", borderRadius:12, padding:12, background:"#fff"}}>
-                      <img src={d.poster || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="} alt={d.title}
-                           style={{ width: 100, height: 150, objectFit: "cover", borderRadius: 8, background: "#f4f4f4" }} loading="lazy" />
-                      <div>
-                        <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap"}}>
-                          <div style={{fontWeight:700}}>{d.title} {d.year ? <span style={{opacity:.65, fontWeight:500}}>({d.year})</span> : null}</div>
-                          {exists && <span style={{fontSize:12, padding:"2px 8px", borderRadius:16, background:"#ecfdf5", border:"1px solid #d1fae5", color:"#065f46"}}>Already in list</span>}
-                        </div>
-                        <div style={{fontSize:12, color:"#666", marginTop:4}}>TMDB</div>
-                        <div style={{marginTop:8}}>
-                          {exists ? (
-                            <button disabled style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8}}>Added ✓</button>
-                          ) : (
-                            <button onClick={() => addRowToCurrentSheet(d.title, d.year, d.kind)}
-                                    style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>Add</button>
-                          )}
-                        </div>
-                      </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: 12,
+          }}
+        >
+          {discover.map((d) => {
+            const key = `${d.title}__${d.year}`;
+            const isAdding = addingKey === key;
+            const exists = (sheets[sheetName] || []).some(
+              (r) =>
+                (r.Title || "").trim() === (d.title || "").trim() &&
+                String(r.Year || "") === String(d.year || "")
+            );
+
+            return (
+              <div
+                key={key}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "100px 1fr",
+                  gap: 12,
+                  border: "1px solid #eee",
+                  borderRadius: 12,
+                  padding: 12,
+                  background: "#fff",
+                }}
+              >
+                <img
+                  src={
+                    d.poster ||
+                    "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+                  }
+                  alt={d.title}
+                  style={{
+                    width: 100,
+                    height: 150,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    background: "#f4f4f4",
+                  }}
+                  loading="lazy"
+                />
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 700 }}>
+                      {d.title}{" "}
+                      {d.year ? (
+                        <span style={{ opacity: 0.65, fontWeight: 500 }}>({d.year})</span>
+                      ) : null}
                     </div>
-                  );
-                })}
+                    {exists && (
+                      <span
+                        style={{
+                          fontSize: 12,
+                          padding: "2px 8px",
+                          borderRadius: 16,
+                          background: "#ecfdf5",
+                          border: "1px solid #d1fae5",
+                          color: "#065f46",
+                        }}
+                      >
+                        Already in list
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>TMDB</div>
+                  <div style={{ marginTop: 8 }}>
+                    {exists ? (
+                      <button
+                        disabled
+                        style={{ border: "1px solid #e5e7eb", padding: "6px 10px", borderRadius: 8 }}
+                      >
+                        Added ✓
+                      </button>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          setAddingKey(key);
+                          await addRowToCurrentSheet(d.title, d.year, d.kind);
+                          setAddingKey("");
+                        }}
+                        disabled={isAdding}
+                        style={{
+                          border: "1px solid #e5e7eb",
+                          padding: "6px 10px",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {isAdding ? "Adding…" : "Add"}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div style={{padding:"10px 14px", borderTop:"1px solid #eee", display:"flex", justifyContent:"flex-end", gap:8}}>
-              <button onClick={closeDiscover} style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>Close</button>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
+      </div>
+
+      <div
+        style={{
+          padding: "10px 14px",
+          borderTop: "1px solid #eee",
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 8,
+        }}
+      >
+        <button
+          onClick={closeDiscover}
+          style={{ border: "1px solid #e5e7eb", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
 
       {/* Toast */}
       {toast && (
