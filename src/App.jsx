@@ -425,7 +425,7 @@ export default function App() {
   const [sheetName, setSheetName] = useState("");
   const [search, setSearch] = useState("");
   const [platform, setPlatform] = useState("");
-  const [sortBy, setSortBy] = useState("");
+  const [sortBy, setSortBy] = useState("Title"); // default sort by Title
   const [sortDir, setSortDir] = useState("asc");
   const [view, setView] = useState("cards");
 
