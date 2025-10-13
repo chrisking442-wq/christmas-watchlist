@@ -66,7 +66,7 @@ async function tvRatingGBorUS(id) {
   return pick("GB") || pick("US") || "";
 }
 
-/* Providers â†’ Where to Watch (UK) */
+/* Providers → Where to Watch (UK) */
 const PROVIDER_MAP = {
   "Netflix": "Netflix", "Netflix Kids": "Netflix", "Netflix basic with Ads": "Netflix",
   "Disney Plus": "Disney+",
@@ -244,7 +244,7 @@ function CardItem({ row, isTVSheet, onDelete, onToggleWatched, onRefreshProvider
           </div>
           {platformTxt ? <span style={{fontSize:12, padding:"2px 8px", borderRadius:16, background:"#f3f4f6", border:"1px solid #e5e7eb"}}>{platformTxt}</span> : null}
           <label style={{fontSize:13, display:"inline-flex", alignItems:"center", gap:6, marginLeft:"auto"}}>
-            <input type="checkbox" checked={watched} onChange={() => onToggleWatched(title, year)} /> Iâ€™ve watched it
+            <input type="checkbox" checked={watched} onChange={() => onToggleWatched(title, year)} /> I’ve watched it
           </label>
         </div>
         {cast && <div style={{fontSize:13, marginTop:6}}><b>Cast:</b> {cast}</div>}
@@ -254,9 +254,9 @@ function CardItem({ row, isTVSheet, onDelete, onToggleWatched, onRefreshProvider
           <a href={imdbDirect || imdbSearchFor(title, year)} target="_blank" rel="noreferrer"
              style={{border:"1px solid #ddd", padding:"6px 10px", borderRadius:8, textDecoration:"none"}}>IMDb</a>
           <button onClick={() => onRefreshProviders(title, year, isTVSheet)} title="Refresh Where to Watch"
-                  style={{border:"1px solid #dbeafe", background:"#eff6ff", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>ðŸ”„ Refresh providers</button>
+                  style={{border:"1px solid #dbeafe", background:"#eff6ff", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>🔄 Refresh providers</button>
           <button onClick={() => onDelete(title, year)} title="Remove"
-                  style={{border:"1px solid #f3c1c1", background:"#ffe9e9", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>ðŸ—‘ï¸ Remove</button>
+                  style={{border:"1px solid #f3c1c1", background:"#ffe9e9", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>🗑️ Remove</button>
         </div>
       </div>
     </div>
@@ -346,19 +346,33 @@ export default function App() {
     } catch { return ""; }
   };
 
-  useEffect(() => {
-    // Only auto-load if no local data
-    const hasLocal = !!localStorage.getItem("cw_sheets");
-    if (hasLocal) return;
+  
+// ⬇️ Force-load default every time the app mounts (URL ?code=… overrides)
+useEffect(() => {
+  const getUrlCode = () => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const c = (sp.get("code") || "").toUpperCase();
+      return c || "";
+    } catch { return ""; }
+  };
 
-    const fromUrl = getUrlCode();
-    const fromEnv = (import.meta.env.VITE_DEFAULT_LOAD_CODE || "").toUpperCase();
-    const fallback = "PMR9EE"; // your chosen default
-    const code = fromUrl || fromEnv || fallback;
+  // If you only want this on your deployment, uncomment:
+  // if (!location.hostname.endsWith(".vercel.app")) return;
 
-    if (code) loadFromCloud(code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const fromUrl = getUrlCode();
+  const fromEnv = (import.meta.env.VITE_DEFAULT_LOAD_CODE || "").toUpperCase();
+  const fallback = "PMR9EE"; // your chosen default
+  const code = fromUrl || fromEnv || fallback;
+
+  // ensure no stale local list flashes in
+  localStorage.removeItem("cw_sheets");
+  localStorage.removeItem("cw_sheetName");
+
+  if (code) loadFromCloud(code);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
 
   /* --------- Upload --------- */
   const onUpload = async (e) => {
@@ -528,13 +542,13 @@ export default function App() {
     <div style={{ padding:16, maxWidth:1200, margin:"0 auto" }}>
       {/* Simple header with cloud controls always visible */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:8 }}>
-        <h1 style={{ margin:0 }}>ðŸŽ„ Christmas Watchlist</h1>
+        <h1 style={{ margin:0 }}>🎄 Christmas Watchlist</h1>
         <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
           <input placeholder="Share/Load code" value={cloudCode} onChange={(e)=>setCloudCode(e.target.value.toUpperCase())}
                  style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8}} />
-          <button onClick={() => loadFromCloud()} style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>â˜ï¸ Load</button>
+          <button onClick={() => loadFromCloud()} style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>☁️ Load</button>
           <button onClick={saveToCloud} disabled={!Object.keys(sheets).length}
-                  style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:Object.keys(sheets).length?"pointer":"not-allowed"}}>â˜ï¸ Save</button>
+                  style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:Object.keys(sheets).length?"pointer":"not-allowed"}}>☁️ Save</button>
         </div>
       </div>
 
@@ -543,13 +557,13 @@ export default function App() {
           <div style={{flex:"1 1 auto", height:6, background:"#f1f5f9", borderRadius:4, overflow:"hidden"}}>
             <div style={{width:`${barPct}%`, height:"100%", background:"#2f80ed", transition:"width .2s ease"}}/>
           </div>
-          <span style={{fontSize:12, color:"#555"}}>Enrichingâ€¦ {enrichProgress.done}/{enrichProgress.total}</span>
+          <span style={{fontSize:12, color:"#555"}}>Enriching… {enrichProgress.done}/{enrichProgress.total}</span>
         </div>
       )}
 
       {!TMDB_KEY && (
         <p style={{background:"#fff7ed", border:"1px solid #fed7aa", padding:8, borderRadius:8}}>
-          Add your TMDB key to <code>.env</code> as <code>VITE_TMDB_API_KEY=â€¦</code> then restart.
+          Add your TMDB key to <code>.env</code> as <code>VITE_TMDB_API_KEY=…</code> then restart.
         </p>
       )}
 
@@ -567,7 +581,7 @@ export default function App() {
               {sheetNames.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
 
-            <input placeholder="Search title, cast, synopsisâ€¦" value={search} onChange={(e) => setSearch(e.target.value)}
+            <input placeholder="Search title, cast, synopsis…" value={search} onChange={(e) => setSearch(e.target.value)}
                    style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, minWidth:220}} />
 
             <select value={platform} onChange={(e) => setPlatform(e.target.value)} title="Filter by platform"
@@ -582,19 +596,19 @@ export default function App() {
                     style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>Reset</button>
             <button onClick={() => saveAsXlsx("Christmas_Watchlist_Enriched.xlsx", sheets)}
                     disabled={!Object.keys(sheets).length}
-                    style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>ðŸ’¾ Export XLSX</button>
+                    style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>💾 Export XLSX</button>
 
             <div style={{flex:"1 1 auto"}} />
 
             <button onClick={() => openDiscover()} disabled={isLoadingDiscover || !TMDB_KEY}
                     title="Discover more"
                     style={{border:"1px solid #c7d2fe", background:"#eef2ff", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>
-              ðŸ”Ž Discover more
+              🔎 Discover more
             </button>
             <button onClick={enrichVisible} disabled={!filtered.length || isEnriching || !TMDB_KEY}
                     title="Fetch runtime, cast, synopsis, ratings & Where to Watch (UK)"
                     style={{border:"1px solid #d1fae5", background:"#ecfdf5", padding:"6px 10px", borderRadius:8, cursor:(!filtered.length||isEnriching||!TMDB_KEY)?"not-allowed":"pointer"}}>
-              {isEnriching ? `Enrichingâ€¦ ${enrichProgress.done}/${enrichProgress.total}` : "âœ¨ Enrich visible (incl. Where to Watch)"}
+              {isEnriching ? `Enriching… ${enrichProgress.done}/${enrichProgress.total}` : "✨ Enrich visible (incl. Where to Watch)"}
             </button>
 
             <div style={{display:"inline-flex", gap:8, marginLeft:8}}>
@@ -637,7 +651,7 @@ export default function App() {
                       <th key={h} onClick={() => onSort(h)}
                           style={{textAlign:"left", padding:"8px 6px", borderBottom:"1px solid #e5e7eb", cursor:"pointer", whiteSpace:"nowrap"}}>
                         <span>{h}</span>
-                        {sortBy === h && <span style={{marginLeft:6, opacity:.6}}>{sortDir === "asc" ? "â–²" : "â–¼"}</span>}
+                        {sortBy === h && <span style={{marginLeft:6, opacity:.6}}>{sortDir === "asc" ? "▲" : "▼"}</span>}
                       </th>
                     ))}
                   </tr>
@@ -651,7 +665,7 @@ export default function App() {
                             <td key={h} style={{padding:"8px 6px", whiteSpace:"nowrap"}}>
                               <button onClick={() => refreshProvidersFor(row["Title"], row["Year"], isTVSheet)}
                                       title="Refresh Where to Watch"
-                                      style={{border:"1px solid #dbeafe", background:"#eff6ff", padding:"4px 8px", borderRadius:8, cursor:"pointer", marginRight:6}}>ðŸ”„</button>
+                                      style={{border:"1px solid #dbeafe", background:"#eff6ff", padding:"4px 8px", borderRadius:8, cursor:"pointer", marginRight:6}}>🔄</button>
                               <button onClick={() => toggleWatched(row["Title"], row["Year"])}
                                       style={{border:"1px solid #e5e7eb", padding:"4px 8px", borderRadius:8, cursor:"pointer", marginRight:6}}>
                                 {row.Watched ? "Unwatch" : "Watched"}
@@ -702,7 +716,7 @@ export default function App() {
           <div onClick={(e) => e.stopPropagation()} style={{width:"min(100%,980px)", maxHeight:"88vh", overflow:"auto", background:"#fff", borderRadius:16, boxShadow:"0 10px 30px rgba(0,0,0,0.2)"}}>
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 14px", borderBottom:"1px solid #eee"}}>
               <b>Discover more Christmas films</b>
-              <button onClick={closeDiscover} title="Close" style={{cursor:"pointer", border:"1px solid #e5e7eb", borderRadius:8, padding:"4px 8px"}}>âœ•</button>
+              <button onClick={closeDiscover} title="Close" style={{cursor:"pointer", border:"1px solid #e5e7eb", borderRadius:8, padding:"4px 8px"}}>✕</button>
             </div>
 
             <div style={{display:"flex", gap:8, alignItems:"center", padding:"10px 14px", borderBottom:"1px solid #eee", flexWrap:"wrap"}}>
@@ -714,7 +728,7 @@ export default function App() {
             </div>
 
             <div style={{padding:14}}>
-              {isLoadingDiscover && <div>Loadingâ€¦</div>}
+              {isLoadingDiscover && <div>Loading…</div>}
               {!isLoadingDiscover && !discover.length && <div style={{color:"#666"}}>Type a search and press Enter.</div>}
 
               <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))", gap:12}}>
@@ -735,7 +749,7 @@ export default function App() {
                         <div style={{fontSize:12, color:"#666", marginTop:4}}>TMDB</div>
                         <div style={{marginTop:8}}>
                           {exists ? (
-                            <button disabled style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8}}>Added âœ“</button>
+                            <button disabled style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8}}>Added ✓</button>
                           ) : (
                             <button onClick={() => addRowToCurrentSheet(d.title, d.year, d.kind)}
                                     style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>Add</button>
@@ -772,7 +786,7 @@ export default function App() {
           <button onClick={() => openDiscover()} disabled={!TMDB_KEY}
                   title="Discover more"
                   style={{border:"1px solid #c7d2fe", background:"#eef2ff", padding:"10px 12px", borderRadius:999, cursor:"pointer", boxShadow:"0 6px 18px rgba(0,0,0,.12)"}}>
-            ðŸ”Ž
+            🔎
           </button>
         </div>
       )}
