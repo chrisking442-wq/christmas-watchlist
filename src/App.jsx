@@ -1,4 +1,6 @@
 import React from "react";
+import "./App.css";     // your component/app styles
+import "./index.css";   // only if this file exists (Tailwind/global)
 
 /** =============================
  *  Config & LocalStorage Keys
