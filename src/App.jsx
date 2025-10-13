@@ -152,7 +152,6 @@ async function buildRowFromTmdbTV(tv) {
   const [det, credits, imdb, rating, providers] = await Promise.all([
     tmdbDetails("tv", tv.id),
     tmdbCredits("tv", tv.id),
-#if
     tmdbImdbUrlFor("tv", tv.id),
     tvRatingGBorUS(tv.id),
     tvProvidersGB(tv.id),
@@ -301,10 +300,6 @@ export default function App() {
   const [cloudCode, setCloudCode] = useState(localStorage.getItem("cw_code") || "");
   useEffect(() => { if (cloudCode) localStorage.setItem("cw_code", cloudCode); }, [cloudCode]);
 
-  // prefer FILM/MOVIE sheet names first
-  const preferFilmSheetName = (names) =>
-    names.find((n) => /film|movie/i.test(n)) || names[0] || "";
-
   async function loadFromCloud(codeArg) {
     if (!supabase) { alert("Supabase not configured."); return; }
     const codeToUse = (codeArg || cloudCode || "").toUpperCase();
@@ -316,9 +311,9 @@ export default function App() {
       .single();
     if (error || !data) { alert("Not found for code: " + codeToUse); return; }
     setSheets(data.data || {});
-    const names = Object.keys(data.data || {});
-    const first = preferFilmSheetName(names);           // <<< prefer FILM by default
-    if (first) setSheetName(first);
+const names = Object.keys(data.data || {});
+const preferFilm = names.find(n => /film|movie/i.test(n)) || names[0] || "";
+if (preferFilm) setSheetName(preferFilm);
     setCloudCode(codeToUse);
     setToast({ text:"Loaded from cloud.", type:"ok" }); setTimeout(()=>setToast(null), 2000);
   }
@@ -352,19 +347,33 @@ export default function App() {
     } catch { return ""; }
   };
 
-  // Always force-load default on mount
-  useEffect(() => {
-    const fromUrl = getUrlCode();
-    const fromEnv = (import.meta.env.VITE_DEFAULT_LOAD_CODE || "").toUpperCase();
-    const fallback = "PMR9EE";
-    const code = fromUrl || fromEnv || fallback;
+  
+// ⬇️ Force-load default every time the app mounts (URL ?code=… overrides)
+useEffect(() => {
+  const getUrlCode = () => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const c = (sp.get("code") || "").toUpperCase();
+      return c || "";
+    } catch { return ""; }
+  };
 
-    localStorage.removeItem("cw_sheets");
-    localStorage.removeItem("cw_sheetName");
+  // If you only want this on your deployment, uncomment:
+  // if (!location.hostname.endsWith(".vercel.app")) return;
 
-    if (code) loadFromCloud(code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const fromUrl = getUrlCode();
+  const fromEnv = (import.meta.env.VITE_DEFAULT_LOAD_CODE || "").toUpperCase();
+  const fallback = "PMR9EE"; // your chosen default
+  const code = fromUrl || fromEnv || fallback;
+
+  // ensure no stale local list flashes in
+  localStorage.removeItem("cw_sheets");
+  localStorage.removeItem("cw_sheetName");
+
+  if (code) loadFromCloud(code);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
 
   /* --------- Upload --------- */
   const onUpload = async (e) => {
@@ -379,10 +388,10 @@ export default function App() {
         next[name] = rows.map(r => ({ Watched: !!r.Watched, ...r }));
       });
       setSheets(next);
+      const nonEmpty = wb.SheetNames.filter(n => (next[n] || []).length > 0);
+const preferFilm = nonEmpty.find(n => /film|movie/i.test(n)) || nonEmpty[0] || wb.SheetNames[0];
+setSheetName(preferFilm ?? "");
 
-      const names = wb.SheetNames.filter(n => (next[n] || []).length > 0);
-      const first = preferFilmSheetName(names);         // <<< prefer FILM on upload too
-      setSheetName(first || names[0] || wb.SheetNames[0] || "");
     } catch (err) {
       console.error("Failed to read Excel:", err);
       alert("Couldn't read that Excel file. Is it .xlsx and not password-protected?");
@@ -480,39 +489,6 @@ export default function App() {
       return next;
     });
     setToast({ text:"Providers updated.", type:"ok" }); setTimeout(()=>setToast(null), 1500);
-  };
-
-  /* ====== NEW: add from Discover (de-dupe + persist) ====== */
-  const addRowToCurrentSheet = (title, year /*, kind*/) => {
-    if (!sheetName) return;
-    setSheets(prev => {
-      const next = { ...prev };
-      const cur = next[sheetName] || [];
-      const exists = cur.some(r =>
-        (r.Title || "").trim() === (title || "").trim() &&
-        String(r.Year || "") === String(year || "")
-      );
-      if (exists) return prev;
-
-      const newRow = {
-        Title: title || "",
-        Year: (year || "").toString().slice(0, 4),
-        "Where to Watch (UK)": "",
-        "Age Rating": "",
-        "Runtime (min)": "",
-        "Top Cast": "",
-        Synopsis: "",
-        Director: "",
-        Tone: "",
-        "Family Friendliness": "",
-        "Poster URL": "",
-        "IMDb Link": imdbSearchFor(title, year),
-        Watched: false
-      };
-      next[sheetName] = [...cur, newRow];
-      return next;
-    });
-    setToast({ text:"Added to list ✓", type:"ok" }); setTimeout(()=>setToast(null), 1500);
   };
 
   /* ====== Enrich (progress UI) ====== */
