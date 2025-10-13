@@ -83,6 +83,7 @@ const PROVIDER_MAP = {
   "YouTube": "YouTube", "Google Play Movies": "Google Play",
   "Amazon Video": "Amazon Video", "Apple TV": "Apple (Store)", "Sky Store": "Sky Store",
 };
+
 function mapProvidersGB(json) {
   const gb = (json?.results?.GB) || {};
   const buckets = ["flatrate", "ads", "free"]; // omit rent/buy; add if you want
@@ -97,8 +98,9 @@ function mapProvidersGB(json) {
   const rest = [...bag].filter(x => !listed.includes(x)).sort();
   return [...listed, ...rest].join(", ");
 }
+
 const movieProvidersGB = async (id) => mapProvidersGB(await tmdb(`/movie/${id}/watch/providers`));
-const tvProvidersGB = async (id) => mapProvidersGB(await tmdb(`/tv/${id}/watch/providers`));
+const tvProvidersGB   = async (id) => mapProvidersGB(await tmdb(`/tv/${id}/watch/providers`));
 
 /* Clickable provider links (web URLs; most devices will hand off to the app if installed) */
 const PROVIDER_URL = {
@@ -123,66 +125,6 @@ const PROVIDER_URL = {
   "Sky Store": "https://www.skystore.com/",
 };
 
-/* Render a comma-separated provider string as clickable links */
-function ProviderLinks({ text }) {
-  const names = (text || "")
-    .split(",")
-    .map(s => s.trim())
-    .filter(Boolean);
-  if (!names.length) return null;
-
-  return (
-  <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
-    {names.map((name, i) => {
-      const href = PROVIDER_URL[name] || "";
-      const chipStyle = {
-        fontSize: 12,
-        padding: "2px 8px",
-        borderRadius: 16,
-        background: "#f3f4f6",
-        border: "1px solid #e5e7eb",
-        textDecoration: "none",
-        color: "inherit",
-        display: "inline-block"
-      };
-
-      if (!href) {
-        return <span key={name + i} style={chipStyle}>{name}</span>;
-      }
-
-      return (
-        <a
-          key={name + i}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={chipStyle}
-          onClick={(e) => {
-            // If user is cmd/ctrl-clicking or opening via context menu, let it behave normally.
-            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
-            // Otherwise prefer the app (mobile) with fallback to web in a new tab.
-            e.preventDefault();
-            openProvider(name, href);
-          }}
-        >
-          {name}
-        </a>
-      );
-    })}
-  </span>
-);
-
-        return href ? (
-          <a key={name + i} href={href} target="_blank" rel="noreferrer" style={chipStyle}>
-            {name}
-          </a>
-        ) : (
-          <span key={name + i} style={chipStyle}>{name}</span>
-        );
-      })}
-    </span>
-  );
-}
 /* Optional: prefer opening the native app (mobile) and fall back to web */
 const PREFER_APP_LINKS = true;
 
@@ -191,7 +133,7 @@ const PROVIDER_APP_SCHEME = {
   "Netflix":       "nflx://www.netflix.com",
   "Disney+":       "disneyplus://",
   "Prime Video":   "primevideo://",
-  "Apple TV+":     "videos://",           // iOS Videos / TV app; may vary
+  "Apple TV+":     "videos://",           // iOS TV app may vary
   "Paramount+":    "paramountplus://",
   "NOW":           "nowtv://",
   "Sky (Sky Go)":  "skygo://",
@@ -211,48 +153,94 @@ const PROVIDER_APP_SCHEME = {
 
 /**
  * Try to open a native app (mobile) then fall back to web in a new tab.
- * - On iOS/Android this often hands off to the installed app.
- * - On desktop, or if blocked, we just open the web url in a new tab.
+ * On desktop, or if blocked, just open the web url in a new tab.
  */
 function openProvider(name, webUrl) {
   const ua = (typeof navigator !== "undefined" ? navigator.userAgent || "" : "");
   const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
   const scheme = PROVIDER_APP_SCHEME[name];
 
-  // If we’re not preferring apps or have no scheme, just open the site.
   if (!PREFER_APP_LINKS || !scheme) {
     window.open(webUrl, "_blank", "noopener,noreferrer");
     return;
   }
 
-  // Mobile best-effort: try app scheme first, then fall back to web.
   if (isMobile) {
     let didFallback = false;
-
-    // Create a hidden iframe to attempt the scheme without leaving the page.
     const iframe = document.createElement("iframe");
     iframe.style.display = "none";
     document.body.appendChild(iframe);
 
     const timer = setTimeout(() => {
-      // If the app didn’t open, fall back to web in a new tab.
       didFallback = true;
       window.open(webUrl, "_blank", "noopener,noreferrer");
-      document.body.removeChild(iframe);
+      try { document.body.removeChild(iframe); } catch {}
     }, 700);
 
     try {
       iframe.src = scheme;
     } catch {
-      // If setting the scheme fails, fall back immediately.
       clearTimeout(timer);
       if (!didFallback) window.open(webUrl, "_blank", "noopener,noreferrer");
       try { document.body.removeChild(iframe); } catch {}
     }
   } else {
-    // Desktop: most apps won’t be registered, open web in a new tab.
     window.open(webUrl, "_blank", "noopener,noreferrer");
   }
+}
+
+/* Render a comma-separated provider string as clickable links */
+function ProviderLinks({ text }) {
+  const names = (text || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!names.length) return null;
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+      {names.map((name, i) => {
+        const href = PROVIDER_URL[name] || "";
+        const chipStyle = {
+          fontSize: 12,
+          padding: "2px 8px",
+          borderRadius: 16,
+          background: "#f3f4f6",
+          border: "1px solid #e5e7eb",
+          textDecoration: "none",
+          color: "inherit",
+          display: "inline-block",
+        };
+
+        if (!href) {
+          return (
+            <span key={name + i} style={chipStyle}>
+              {name}
+            </span>
+          );
+        }
+
+        return (
+          <a
+            key={name + i}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={chipStyle}
+            onClick={(e) => {
+              // Let power users open in new tab/window normally
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+              e.preventDefault();
+              openProvider(name, href); // try app scheme, fall back to web
+            }}
+          >
+            {name}
+          </a>
+        );
+      })}
+    </span>
+  );
 }
 
 
