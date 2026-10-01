@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
+import AuthPanel from "./AuthPanel";
+import MyLibrary from "./MyLibrary";
 
 /* ========= ENV / CLIENTS ========= */
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -421,6 +423,23 @@ function ImdbLinkCell({ title, year, isTVSheet, fallbackUrl }) {
 
 /* ========= MAIN APP ========= */
 export default function App() {
+    const [session, setSession] = useState(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
   const [sheets, setSheets] = useState({});
   const [sheetName, setSheetName] = useState("");
   const [search, setSearch] = useState("");
@@ -772,7 +791,7 @@ const addRowToCurrentSheet = async (title, year, kind) => {
       {/* Simple header with cloud controls always visible */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:8 }}>
         <h1 style={{ margin:0 }}>🎄 Christmas Watchlist</h1>
-        <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
+                <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
           <input placeholder="Share/Load code" value={cloudCode} onChange={(e)=>setCloudCode(e.target.value.toUpperCase())}
                  style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8}} />
           <button onClick={() => loadFromCloud()} style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>☁️ Load</button>
@@ -780,6 +799,12 @@ const addRowToCurrentSheet = async (title, year, kind) => {
                   style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:Object.keys(sheets).length?"pointer":"not-allowed"}}>☁️ Save</button>
         </div>
       </div>
+
+      <div style={{ marginBottom: 18 }}>
+  <AuthPanel supabase={supabase} session={session} />
+</div>
+
+<MyLibrary supabase={supabase} session={session} />
 
       {isEnriching && (
         <div style={{position:"sticky", top:8, zIndex:1000, background:"#fff", border:"1px solid #eee", borderRadius:8, padding:"8px 10px", display:"flex", alignItems:"center", gap:10, marginBottom:10}}>
