@@ -73,6 +73,26 @@ export default function MyLibrary({ supabase, session }) {
 
     setLoadingItems(false);
   }
+  async function removeItem(itemId) {
+  const confirmed = window.confirm(
+    "Remove this film from " + selectedList.name + "?"
+  );
+
+  if (!confirmed) return;
+
+  const { error } = await supabase
+    .from("v2_list_items")
+    .delete()
+    .eq("id", itemId);
+
+  if (error) {
+    console.error(error);
+    setError("Couldn't remove the film: " + error.message);
+    return;
+  }
+
+  setItems((prev) => prev.filter((item) => item.id !== itemId));
+}
 
   if (!session?.user) return null;
 
@@ -208,6 +228,20 @@ export default function MyLibrary({ supabase, session }) {
                             : film.overview}
                         </div>
                       )}
+                      <button
+  onClick={() => removeItem(item.id)}
+  style={{
+    marginTop: 10,
+    border: "1px solid #fecaca",
+    background: "#fff1f2",
+    padding: "6px 9px",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: 12,
+  }}
+>
+  Remove
+</button>
                     </div>
                   </div>
                 );
