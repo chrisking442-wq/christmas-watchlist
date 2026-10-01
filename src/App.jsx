@@ -897,7 +897,19 @@ const addRowToCurrentSheet = async (title, year, kind) => {
   <AuthPanel supabase={supabase} session={session} />
 </div>
 
-<MyLibrary supabase={supabase} session={session} />
+<MyLibrary
+  supabase={supabase}
+  session={session}
+  onWatchlistRemoved={(tmdbId) => {
+    setWatchlistTmdbIds((prev) => {
+      const next = new Set(prev);
+      next.delete(tmdbId);
+      return next;
+    });
+
+    setDiscover((prev) => [...prev]);
+  }}
+/>
 
       {isEnriching && (
         <div style={{position:"sticky", top:8, zIndex:1000, background:"#fff", border:"1px solid #eee", borderRadius:8, padding:"8px 10px", display:"flex", alignItems:"center", gap:10, marginBottom:10}}>

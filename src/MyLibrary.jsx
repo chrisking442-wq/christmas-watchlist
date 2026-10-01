@@ -2,7 +2,11 @@ import React, { useEffect, useState } from "react";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 
-export default function MyLibrary({ supabase, session }) {
+export default function MyLibrary({
+  supabase,
+  session,
+  onWatchlistRemoved,
+}) {
   const [lists, setLists] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [items, setItems] = useState([]);
@@ -73,7 +77,7 @@ export default function MyLibrary({ supabase, session }) {
 
     setLoadingItems(false);
   }
-  async function removeItem(itemId) {
+  async function removeItem(itemId, tmdbId) {
   const confirmed = window.confirm(
     "Remove this film from " + selectedList.name + "?"
   );
@@ -91,7 +95,16 @@ export default function MyLibrary({ supabase, session }) {
     return;
   }
 
-  setItems((prev) => prev.filter((item) => item.id !== itemId));
+   setItems((prev) => prev.filter((item) => item.id !== itemId));
+
+if (
+  selectedList?.list_type === "watchlist" &&
+  onWatchlistRemoved &&
+  tmdbId
+) {
+  onWatchlistRemoved(tmdbId);
+}
+  
 }
 
   if (!session?.user) return null;
@@ -229,7 +242,7 @@ export default function MyLibrary({ supabase, session }) {
                         </div>
                       )}
                       <button
-  onClick={() => removeItem(item.id)}
+ onClick={() => removeItem(item.id, film?.tmdb_id)}
   style={{
     marginTop: 10,
     border: "1px solid #fecaca",
