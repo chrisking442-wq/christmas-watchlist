@@ -440,6 +440,45 @@ export default function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+useEffect(() => {
+  if (!supabase || !session?.user) {
+    setWatchlistTmdbIds(new Set());
+    return;
+  }
+
+  async function loadWatchlistIds() {
+    const { data, error } = await supabase
+      .from("v2_list_items")
+      .select(`
+        film_id,
+        v2_lists!inner(
+          user_id,
+          list_type
+        ),
+        v2_films!inner(
+          tmdb_id
+        )
+      `)
+      .eq("v2_lists.user_id", session.user.id)
+      .eq("v2_lists.list_type", "watchlist");
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setWatchlistTmdbIds(
+      new Set(
+        (data || [])
+          .map((x) => x.v2_films?.tmdb_id)
+          .filter(Boolean)
+      )
+    );
+  }
+
+  loadWatchlistIds();
+}, [session]);
+
   const [sheets, setSheets] = useState({});
   const [sheetName, setSheetName] = useState("");
   const [search, setSearch] = useState("");
@@ -454,6 +493,7 @@ export default function App() {
   const [isLoadingDiscover, setIsLoadingDiscover] = useState(false);
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [addingKey, setAddingKey] = useState("");
+  const [watchlistTmdbIds, setWatchlistTmdbIds] = useState(new Set());
 
 
   // Progress / toasts
@@ -779,11 +819,64 @@ const addRowToCurrentSheet = async (title, year, kind) => {
     setIsLoadingDiscover(true);
     const j = await tmdb("/search/movie", { query, include_adult: "false", language: "en-GB" });
     const items = (j?.results || []).map(x => ({
-      kind: "movie", id: x.id, title: x.title, year: (x.release_date || "").slice(0,4),
-      poster: x.poster_path ? `${TMDB_IMG}/w342${x.poster_path}` : ""
-    })).slice(0,200);
+  kind: "movie",
+  id: x.id,
+  title: x.title,
+  originalTitle: x.original_title || "",
+  year: (x.release_date || "").slice(0, 4),
+  releaseDate: x.release_date || null,
+  overview: x.overview || "",
+  posterPath: x.poster_path || null,
+  backdropPath: x.backdrop_path || null,
+  poster: x.poster_path ? `${TMDB_IMG}/w342${x.poster_path}` : ""
+})).slice(0, 200);
     setDiscover(items); setIsLoadingDiscover(false);
   };
+  const saveDiscoveredFilm = async (film) => {
+  if (!session?.user) {
+    setToast({ text: "Sign in to save films.", type: "" });
+    setTimeout(() => setToast(null), 2000);
+    return;
+  }
+
+  setAddingKey(String(film.id));
+
+  const { error } = await supabase.rpc(
+    "v2_save_film_to_special_list",
+    {
+      p_list_type: "watchlist",
+      p_tmdb_id: film.id,
+      p_title: film.title,
+      p_original_title: film.originalTitle || null,
+      p_release_date: film.releaseDate || null,
+      p_overview: film.overview || null,
+      p_poster_path: film.posterPath || null,
+      p_backdrop_path: film.backdropPath || null,
+    }
+  );
+
+  setAddingKey("");
+
+  if (error) {
+    console.error(error);
+    setToast({
+      text: "Couldn't add film: " + error.message,
+      type: "",
+    });
+  } else {
+  setWatchlistTmdbIds(prev => new Set([...prev, film.id]));
+
+  // Force the open search results to refresh immediately
+  setDiscover(prev => [...prev]);
+
+  setToast({
+    text: "Added to My Christmas List ✓",
+    type: "ok",
+  });
+}
+
+  setTimeout(() => setToast(null), 2500);
+};
 
   /* ====== UI ====== */
   return (
@@ -791,7 +884,7 @@ const addRowToCurrentSheet = async (title, year, kind) => {
       {/* Simple header with cloud controls always visible */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:8 }}>
         <h1 style={{ margin:0 }}>🎄 Christmas Watchlist</h1>
-                <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
+                <div style={{display:"none"}}>
           <input placeholder="Share/Load code" value={cloudCode} onChange={(e)=>setCloudCode(e.target.value.toUpperCase())}
                  style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8}} />
           <button onClick={() => loadFromCloud()} style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>☁️ Load</button>
@@ -823,7 +916,7 @@ const addRowToCurrentSheet = async (title, year, kind) => {
 
       {/* Controls */}
       <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:12}}>
-        <label style={{display:"inline-flex", alignItems:"center", gap:8, border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>
+        <label style={{display:"none"}}>
           <input type="file" accept=".xlsx,.xls" onChange={onUpload} />
           <span>Upload Excel</span>
         </label>
@@ -850,18 +943,19 @@ const addRowToCurrentSheet = async (title, year, kind) => {
                     style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>Reset</button>
             <button onClick={() => saveAsXlsx("Christmas_Watchlist_Enriched.xlsx", sheets)}
                     disabled={!Object.keys(sheets).length}
-                    style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>💾 Export XLSX</button>
+                    style={{display:"none"}}>
+                      💾 Export XLSX</button>
 
             <div style={{flex:"1 1 auto"}} />
 
             <button onClick={() => openDiscover()} disabled={isLoadingDiscover || !TMDB_KEY}
                     title="Discover more"
                     style={{border:"1px solid #c7d2fe", background:"#eef2ff", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>
-              🔎 Discover more
+              🔎 Search all films
             </button>
             <button onClick={enrichVisible} disabled={!filtered.length || isEnriching || !TMDB_KEY}
                     title="Fetch runtime, cast, synopsis, ratings & Where to Watch (UK)"
-                    style={{border:"1px solid #d1fae5", background:"#ecfdf5", padding:"6px 10px", borderRadius:8, cursor:(!filtered.length||isEnriching||!TMDB_KEY)?"not-allowed":"pointer"}}>
+                    style={{display:"none"}}>
               {isEnriching ? `Enriching… ${enrichProgress.done}/${enrichProgress.total}` : "✨ Enrich visible (incl. Where to Watch)"}
             </button>
 
@@ -1006,7 +1100,7 @@ const addRowToCurrentSheet = async (title, year, kind) => {
           borderBottom: "1px solid #eee",
         }}
       >
-        <b>Discover more Christmas films</b>
+        <b>Search all films</b>
         <button
           onClick={closeDiscover}
           title="Close"
@@ -1027,7 +1121,7 @@ const addRowToCurrentSheet = async (title, year, kind) => {
         }}
       >
         <input
-          placeholder="Search titles (e.g., 'The Christmas', hallmark, etc.)"
+          placeholder="Search for any film..."
           value={discoverQuery}
           onChange={(e) => setDiscoverQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -1064,12 +1158,8 @@ const addRowToCurrentSheet = async (title, year, kind) => {
         >
           {discover.map((d) => {
             const key = `${d.title}__${d.year}`;
-            const isAdding = addingKey === key;
-            const exists = (sheets[sheetName] || []).some(
-              (r) =>
-                (r.Title || "").trim() === (d.title || "").trim() &&
-                String(r.Year || "") === String(d.year || "")
-            );
+            const isAdding = addingKey === String(d.id);
+            const exists = watchlistTmdbIds.has(d.id);
 
             return (
               <div
@@ -1133,11 +1223,7 @@ const addRowToCurrentSheet = async (title, year, kind) => {
                       </button>
                     ) : (
                       <button
-                        onClick={async () => {
-                          setAddingKey(key);
-                          await addRowToCurrentSheet(d.title, d.year, d.kind);
-                          setAddingKey("");
-                        }}
+                        onClick={() => saveDiscoveredFilm(d)}
                         disabled={isAdding}
                         style={{
                           border: "1px solid #e5e7eb",
