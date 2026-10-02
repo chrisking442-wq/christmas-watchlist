@@ -1009,6 +1009,21 @@ const saveFavouriteFilm = async (film) => {
   setDiscover((prev) => [...prev]);
 }}
 />
+<div style={{ marginBottom: 12 }}>
+  <button
+    onClick={openDiscover}
+    style={{
+      border: "1px solid #c7d2fe",
+      background: "#eef2ff",
+      padding: "8px 12px",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontWeight: 600,
+    }}
+  >
+    🔎 Search all films
+  </button>
+</div>
 <CatalogueAdmin
   supabase={supabase}
   session={session}
@@ -1051,7 +1066,7 @@ const saveFavouriteFilm = async (film) => {
       )}
 
       {/* Controls */}
-      <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:12}}>
+      <div style={{display:"none"}}>
         <label style={{display:"none"}}>
           <input type="file" accept=".xlsx,.xls" onChange={onUpload} />
           <span>Upload Excel</span>
@@ -1108,7 +1123,7 @@ const saveFavouriteFilm = async (film) => {
       </div>
 
       {/* Cards */}
-      {view === "cards" && !!filtered.length && (
+      {false && view === "cards" && !!filtered.length && (
         <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))", gap:12}}>
           {filtered.map((row) => (
             <CardItem
@@ -1124,7 +1139,7 @@ const saveFavouriteFilm = async (film) => {
       )}
 
       {/* Table */}
-      {view === "table" && (
+    {false && view === "table" && (
         <>
           {filtered.length ? (
             <div style={{overflow:"auto"}}>
