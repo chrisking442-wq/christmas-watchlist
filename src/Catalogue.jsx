@@ -3,11 +3,35 @@ import React, { useEffect, useState } from "react";
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
 
+const AVAILABILITY_CACHE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function normaliseProviderName(name = "") {
+  const direct = {
+    "Amazon Prime Video": "Prime Video",
+    "Amazon Prime Video with Ads": "Prime Video",
+    "Netflix basic with Ads": "Netflix",
+    "Disney Plus": "Disney+",
+    "Paramount Plus": "Paramount+",
+    "Apple TV Amazon Channel": "Apple TV (Prime Video Channel)",
+  };
+
+  if (direct[name]) return direct[name];
+
+  if (name.endsWith(" Amazon Channel")) {
+    return `${name.replace(/ Amazon Channel$/, "")} (Prime Video Channel)`;
+  }
+
+  return name;
+}
+
 function uniqueProviders(providers = []) {
   const seen = new Set();
 
   return providers.filter((provider) => {
-    const key = provider.provider_id || provider.provider_name;
+    const key =
+      provider.provider_id ||
+      normaliseProviderName(provider.provider_name || "");
+
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -54,11 +78,21 @@ function ProviderChips({ providers }) {
             />
           ) : null}
 
-          {provider.provider_name}
+          {normaliseProviderName(provider.provider_name)}
         </span>
       ))}
     </div>
   );
+}
+
+function chunk(items, size) {
+  const result = [];
+
+  for (let i = 0; i < items.length; i += size) {
+    result.push(items.slice(i, i + size));
+  }
+
+  return result;
 }
 
 export default function Catalogue({
@@ -77,7 +111,10 @@ export default function Catalogue({
   const [error, setError] = useState("");
 
   const [watchProviders, setWatchProviders] = useState({});
+  const [availabilityCheckedAt, setAvailabilityCheckedAt] = useState({});
   const [loadingProviders, setLoadingProviders] = useState(new Set());
+  const [expandedProviders, setExpandedProviders] = useState(new Set());
+  const [providerErrors, setProviderErrors] = useState({});
 
   useEffect(() => {
     if (!supabase) return;
@@ -112,18 +149,108 @@ export default function Catalogue({
         console.error(loadError);
         setError(loadError.message);
         setFilms([]);
-      } else {
-        const rows = (data || [])
-          .map((row) => ({
-            classification: row.classification,
-            ...row.v2_films,
-          }))
-          .filter((row) => row.id)
-          .sort((a, b) =>
-            (a.title || "").localeCompare(b.title || "")
-          );
+        setLoading(false);
+        return;
+      }
 
-        setFilms(rows);
+      const rows = (data || [])
+        .map((row) => ({
+          classification: row.classification,
+          ...row.v2_films,
+        }))
+        .filter((row) => row.id)
+        .sort((a, b) =>
+          (a.title || "").localeCompare(b.title || "")
+        );
+
+      setFilms(rows);
+
+      // Load any UK availability we already cached in Supabase.
+      const filmIds = rows.map((film) => film.id).filter(Boolean);
+      const filmById = new Map(rows.map((film) => [String(film.id), film]));
+
+      const cachedRows = [];
+
+      for (const ids of chunk(filmIds, 150)) {
+        const { data: availabilityData, error: availabilityError } =
+          await supabase
+            .from("v2_streaming_availability")
+            .select(`
+              film_id,
+              provider_id,
+              provider_name,
+              provider_type,
+              logo_path,
+              watch_url,
+              checked_at
+            `)
+            .eq("region", "GB")
+            .in("film_id", ids);
+
+        if (availabilityError) {
+          console.warn(
+            "Couldn't load cached streaming availability:",
+            availabilityError
+          );
+          break;
+        }
+
+        cachedRows.push(...(availabilityData || []));
+      }
+
+      if (!cancelled && cachedRows.length) {
+        const providerMap = {};
+        const checkedMap = {};
+
+        for (const row of cachedRows) {
+          const film = filmById.get(String(row.film_id));
+          if (!film?.tmdb_id) continue;
+
+          const key = film.tmdb_id;
+
+          if (!providerMap[key]) {
+            providerMap[key] = {
+              flatrate: [],
+              free: [],
+              ads: [],
+              link: row.watch_url || null,
+            };
+          }
+
+          if (row.provider_type === "none") {
+            // Sentinel row: this film was checked and no streaming offers existed.
+            checkedMap[key] = row.checked_at;
+            continue;
+          }
+
+          const provider = {
+            provider_id: row.provider_id,
+            provider_name: normaliseProviderName(row.provider_name),
+            logo_path: row.logo_path,
+          };
+
+          if (row.provider_type === "subscription") {
+            providerMap[key].flatrate.push(provider);
+          } else if (row.provider_type === "free") {
+            providerMap[key].free.push(provider);
+          } else if (row.provider_type === "ads") {
+            providerMap[key].ads.push(provider);
+          }
+
+          if (!providerMap[key].link && row.watch_url) {
+            providerMap[key].link = row.watch_url;
+          }
+
+          if (
+            !checkedMap[key] ||
+            new Date(row.checked_at) > new Date(checkedMap[key])
+          ) {
+            checkedMap[key] = row.checked_at;
+          }
+        }
+
+        setWatchProviders(providerMap);
+        setAvailabilityCheckedAt(checkedMap);
       }
 
       setLoading(false);
@@ -136,7 +263,28 @@ export default function Catalogue({
     };
   }, [supabase, refreshKey]);
 
-  async function loadWatchProviders(film) {
+  function isAvailabilityFresh(tmdbId) {
+    const checkedAt = availabilityCheckedAt[tmdbId];
+    if (!checkedAt) return false;
+
+    const checkedMs = Date.parse(checkedAt);
+    if (!Number.isFinite(checkedMs)) return false;
+
+    return Date.now() - checkedMs < AVAILABILITY_CACHE_MS;
+  }
+
+  function toggleExpanded(tmdbId, open) {
+    setExpandedProviders((prev) => {
+      const next = new Set(prev);
+
+      if (open) next.add(tmdbId);
+      else next.delete(tmdbId);
+
+      return next;
+    });
+  }
+
+  async function refreshWatchProviders(film) {
     if (!film?.tmdb_id || !TMDB_KEY) return;
 
     if (loadingProviders.has(film.tmdb_id)) return;
@@ -146,6 +294,11 @@ export default function Catalogue({
       next.add(film.tmdb_id);
       return next;
     });
+
+    setProviderErrors((prev) => ({
+      ...prev,
+      [film.tmdb_id]: "",
+    }));
 
     try {
       const response = await fetch(
@@ -157,18 +310,97 @@ export default function Catalogue({
       }
 
       const data = await response.json();
+      const ukProviders = data?.results?.GB || {
+        flatrate: [],
+        free: [],
+        ads: [],
+        link: null,
+      };
+
+      const normalised = {
+        flatrate: uniqueProviders(
+          (ukProviders.flatrate || []).map((provider) => ({
+            ...provider,
+            provider_name: normaliseProviderName(provider.provider_name),
+          }))
+        ),
+        free: uniqueProviders(
+          (ukProviders.free || []).map((provider) => ({
+            ...provider,
+            provider_name: normaliseProviderName(provider.provider_name),
+          }))
+        ),
+        ads: uniqueProviders(
+          (ukProviders.ads || []).map((provider) => ({
+            ...provider,
+            provider_name: normaliseProviderName(provider.provider_name),
+          }))
+        ),
+        link: ukProviders.link || null,
+      };
+
+      const nowIso = new Date().toISOString();
 
       setWatchProviders((prev) => ({
         ...prev,
-        [film.tmdb_id]: data?.results?.GB || null,
+        [film.tmdb_id]: normalised,
       }));
+
+      setAvailabilityCheckedAt((prev) => ({
+        ...prev,
+        [film.tmdb_id]: nowIso,
+      }));
+
+      toggleExpanded(film.tmdb_id, true);
+
+      const providerRows = [
+        ...normalised.flatrate.map((provider) => ({
+          provider_id: provider.provider_id ?? null,
+          provider_name: provider.provider_name,
+          provider_type: "subscription",
+          logo_path: provider.logo_path || null,
+          watch_url: normalised.link || null,
+        })),
+        ...normalised.free.map((provider) => ({
+          provider_id: provider.provider_id ?? null,
+          provider_name: provider.provider_name,
+          provider_type: "free",
+          logo_path: provider.logo_path || null,
+          watch_url: normalised.link || null,
+        })),
+        ...normalised.ads.map((provider) => ({
+          provider_id: provider.provider_id ?? null,
+          provider_name: provider.provider_name,
+          provider_type: "ads",
+          logo_path: provider.logo_path || null,
+          watch_url: normalised.link || null,
+        })),
+      ];
+
+      const { error: cacheError } = await supabase.rpc(
+        "v2_replace_streaming_availability",
+        {
+          p_film_id: film.id,
+          p_providers: providerRows,
+        }
+      );
+
+      if (cacheError) {
+        console.warn(
+          "Availability loaded, but couldn't cache it:",
+          cacheError
+        );
+      }
     } catch (providerError) {
       console.error("Failed to load UK providers:", providerError);
 
-      setWatchProviders((prev) => ({
+      setProviderErrors((prev) => ({
         ...prev,
-        [film.tmdb_id]: { error: true },
+        [film.tmdb_id]:
+          "Couldn't refresh UK availability right now.",
       }));
+
+      toggleExpanded(film.tmdb_id, true);
     } finally {
       setLoadingProviders((prev) => {
         const next = new Set(prev);
@@ -176,6 +408,23 @@ export default function Catalogue({
         return next;
       });
     }
+  }
+
+  async function handleWhereToWatch(film) {
+    const tmdbId = film.tmdb_id;
+
+    if (expandedProviders.has(tmdbId)) {
+      toggleExpanded(tmdbId, false);
+      return;
+    }
+
+    // If the cached result is still fresh, show it immediately.
+    if (isAvailabilityFresh(tmdbId)) {
+      toggleExpanded(tmdbId, true);
+      return;
+    }
+
+    await refreshWatchProviders(film);
   }
 
   async function addToWatchlist(film) {
@@ -381,19 +630,20 @@ export default function Catalogue({
           }}
         >
           {filteredFilms.map((film) => {
-            const providersLoaded = Object.prototype.hasOwnProperty.call(
-              watchProviders,
-              film.tmdb_id
-            );
-
             const providerData = watchProviders[film.tmdb_id];
             const isLoadingProviders = loadingProviders.has(film.tmdb_id);
+            const isExpanded = expandedProviders.has(film.tmdb_id);
+            const providerError = providerErrors[film.tmdb_id];
 
             const subscriptionProviders = uniqueProviders(
               providerData?.flatrate || []
             );
-            const freeProviders = uniqueProviders(providerData?.free || []);
-            const adProviders = uniqueProviders(providerData?.ads || []);
+            const freeProviders = uniqueProviders(
+              providerData?.free || []
+            );
+            const adProviders = uniqueProviders(
+              providerData?.ads || []
+            );
 
             const hasStreaming =
               subscriptionProviders.length > 0 ||
@@ -522,7 +772,7 @@ export default function Catalogue({
                     )}
 
                     <button
-                      onClick={() => loadWatchProviders(film)}
+                      onClick={() => handleWhereToWatch(film)}
                       disabled={isLoadingProviders || !TMDB_KEY}
                       style={{
                         border: "1px solid #bfdbfe",
@@ -537,13 +787,13 @@ export default function Catalogue({
                     >
                       {isLoadingProviders
                         ? "Checking UK availability…"
-                        : providersLoaded
-                        ? "↻ Refresh where to watch"
+                        : isExpanded
+                        ? "Hide where to watch"
                         : "📺 Where to watch"}
                     </button>
                   </div>
 
-                  {providersLoaded && (
+                  {isExpanded && (
                     <div
                       style={{
                         marginTop: 10,
@@ -555,20 +805,60 @@ export default function Catalogue({
                     >
                       <div
                         style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          marginBottom: 4,
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          flexWrap: "wrap",
                         }}
                       >
-                        Where to watch in the UK
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                          }}
+                        >
+                          Where to watch in the UK
+                        </div>
+
+                        <button
+                          onClick={() => refreshWatchProviders(film)}
+                          disabled={isLoadingProviders}
+                          style={{
+                            border: 0,
+                            background: "transparent",
+                            padding: 0,
+                            color: "#1d4ed8",
+                            fontSize: 11,
+                            cursor: isLoadingProviders
+                              ? "not-allowed"
+                              : "pointer",
+                          }}
+                        >
+                          Refresh
+                        </button>
                       </div>
 
-                      {providerData?.error ? (
-                        <div style={{ fontSize: 12, color: "#b91c1c" }}>
-                          Couldn't load availability right now.
+                      {providerError && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 11,
+                            color: "#b91c1c",
+                          }}
+                        >
+                          {providerError}
                         </div>
-                      ) : !providerData || !hasStreaming ? (
-                        <div style={{ fontSize: 12, color: "#666" }}>
+                      )}
+
+                      {!providerError && !hasStreaming ? (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 12,
+                            color: "#666",
+                          }}
+                        >
                           No UK subscription, free or ad-supported streaming
                           option was found.
                         </div>
@@ -600,7 +890,9 @@ export default function Catalogue({
                               >
                                 Free
                               </div>
-                              <ProviderChips providers={freeProviders} />
+                              <ProviderChips
+                                providers={freeProviders}
+                              />
                             </div>
                           )}
 
@@ -614,13 +906,15 @@ export default function Catalogue({
                               >
                                 Free with ads
                               </div>
-                              <ProviderChips providers={adProviders} />
+                              <ProviderChips
+                                providers={adProviders}
+                              />
                             </div>
                           )}
                         </>
                       )}
 
-                      {!providerData?.error && providerData?.link && (
+                      {!providerError && providerData?.link && (
                         <div style={{ marginTop: 8 }}>
                           <a
                             href={providerData.link}
@@ -636,7 +930,7 @@ export default function Catalogue({
                         </div>
                       )}
 
-                      {!providerData?.error && (
+                      {!providerError && (
                         <div
                           style={{
                             marginTop: 7,
