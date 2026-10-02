@@ -308,6 +308,7 @@ export default function MyLibrary({
   const [items, setItems] = useState([]);
   const [availabilityByFilmId, setAvailabilityByFilmId] = useState({});
   const [alertFilmIds, setAlertFilmIds] = useState(new Set());
+  const [triggeredAlerts, setTriggeredAlerts] = useState([]);
   const [alertSavingFilmIds, setAlertSavingFilmIds] = useState(new Set());
   const [loadingLists, setLoadingLists] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -320,6 +321,7 @@ export default function MyLibrary({
       setItems([]);
       setAvailabilityByFilmId({});
       setAlertFilmIds(new Set());
+      setTriggeredAlerts([]);
       return;
     }
 
@@ -346,17 +348,114 @@ export default function MyLibrary({
     async function loadAvailabilityAlerts() {
       const { data, error } = await supabase
         .from("v2_availability_alerts")
-        .select("film_id")
-        .eq("user_id", session.user.id)
-        .eq("active", true);
+        .select("id, film_id, active, last_notified_at")
+        .eq("user_id", session.user.id);
 
       if (error) {
         console.error("Couldn't load availability alerts:", error);
         return;
       }
 
+      const alertRows = data || [];
+
       setAlertFilmIds(
-        new Set((data || []).map((row) => String(row.film_id)))
+        new Set(
+          alertRows
+            .filter((row) => row.active)
+            .map((row) => String(row.film_id))
+        )
+      );
+
+      const triggered = alertRows.filter(
+        (row) => !row.active && row.last_notified_at
+      );
+
+      if (!triggered.length) {
+        setTriggeredAlerts([]);
+        return;
+      }
+
+      const filmIds = triggered.map((row) => row.film_id);
+
+      const [
+        { data: filmData, error: filmError },
+        { data: availabilityData, error: availabilityError },
+      ] = await Promise.all([
+        supabase
+          .from("v2_films")
+          .select("id, title, release_year, poster_path")
+          .in("id", filmIds),
+
+        supabase
+          .from("v2_streaming_availability")
+          .select(
+            "film_id, provider_name, provider_type, watch_url"
+          )
+          .eq("region", "GB")
+          .in("film_id", filmIds)
+          .in("provider_type", ["subscription", "free", "ads"]),
+      ]);
+
+      if (filmError) {
+        console.error("Couldn't load alert films:", filmError);
+      }
+
+      if (availabilityError) {
+        console.error(
+          "Couldn't load alert availability:",
+          availabilityError
+        );
+      }
+
+      const filmsById = new Map(
+        (filmData || []).map((film) => [String(film.id), film])
+      );
+
+      const availabilityById = {};
+
+      for (const row of availabilityData || []) {
+        const key = String(row.film_id);
+
+        if (!availabilityById[key]) {
+          availabilityById[key] = {
+            providers: new Set(),
+            watchUrl: row.watch_url || null,
+          };
+        }
+
+        availabilityById[key].providers.add(
+          normaliseProviderName(row.provider_name)
+        );
+
+        if (!availabilityById[key].watchUrl && row.watch_url) {
+          availabilityById[key].watchUrl = row.watch_url;
+        }
+      }
+
+      setTriggeredAlerts(
+        triggered
+          .map((row) => {
+            const key = String(row.film_id);
+            const film = filmsById.get(key) || {};
+            const availability = availabilityById[key];
+
+            return {
+              id: row.id,
+              filmId: row.film_id,
+              title: film.title || "A film you're watching",
+              releaseYear: film.release_year || null,
+              posterPath: film.poster_path || null,
+              lastNotifiedAt: row.last_notified_at,
+              providers: availability
+                ? [...availability.providers]
+                : [],
+              watchUrl: availability?.watchUrl || null,
+            };
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.lastNotifiedAt) - new Date(a.lastNotifiedAt)
+          )
       );
     }
 
@@ -496,11 +595,17 @@ export default function MyLibrary({
       } else {
         const { error } = await supabase
           .from("v2_availability_alerts")
-          .insert({
-            user_id: session.user.id,
-            film_id: filmId,
-            active: true,
-          });
+          .upsert(
+            {
+              user_id: session.user.id,
+              film_id: filmId,
+              active: true,
+              last_notified_at: null,
+            },
+            {
+              onConflict: "user_id,film_id",
+            }
+          );
 
         if (error) throw error;
 
@@ -522,6 +627,26 @@ export default function MyLibrary({
         return next;
       });
     }
+  }
+
+  async function dismissTriggeredAlert(alertId) {
+    if (!alertId || !session?.user) return;
+
+    const { error } = await supabase
+      .from("v2_availability_alerts")
+      .delete()
+      .eq("id", alertId)
+      .eq("user_id", session.user.id);
+
+    if (error) {
+      console.error(error);
+      setError("Couldn't dismiss the alert: " + error.message);
+      return;
+    }
+
+    setTriggeredAlerts((prev) =>
+      prev.filter((alert) => alert.id !== alertId)
+    );
   }
 
   async function removeItem(itemId, tmdbId) {
@@ -580,6 +705,120 @@ export default function MyLibrary({
       {error && (
         <div style={{ color: "#b91c1c", marginBottom: 10 }}>
           {error}
+        </div>
+      )}
+
+      {triggeredAlerts.length > 0 && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: 12,
+            border: "1px solid #86efac",
+            borderRadius: 10,
+            background: "#f0fdf4",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 700,
+              marginBottom: 8,
+            }}
+          >
+            🎉 Now available
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            {triggeredAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  padding: 9,
+                  border: "1px solid #bbf7d0",
+                  borderRadius: 8,
+                  background: "#fff",
+                }}
+              >
+                {alert.posterPath ? (
+                  <img
+                    src={`${TMDB_IMG}/w92${alert.posterPath}`}
+                    alt=""
+                    aria-hidden="true"
+                    style={{
+                      width: 42,
+                      height: 63,
+                      objectFit: "cover",
+                      borderRadius: 5,
+                    }}
+                  />
+                ) : null}
+
+                <div
+                  style={{
+                    flex: "1 1 180px",
+                    minWidth: 0,
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>
+                    {alert.title}
+                    {alert.releaseYear
+                      ? ` (${alert.releaseYear})`
+                      : ""}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 3,
+                      fontSize: 12,
+                      color: "#444",
+                    }}
+                  >
+                    {alert.providers.length
+                      ? `Now available on ${alert.providers.join(", ")}.`
+                      : "Now available to stream in the UK."}
+                  </div>
+
+                  {alert.watchUrl && (
+                    <a
+                      href={alert.watchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: "inline-block",
+                        marginTop: 4,
+                        fontSize: 12,
+                        color: "#1d4ed8",
+                      }}
+                    >
+                      View watch options
+                    </a>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => dismissTriggeredAlert(alert.id)}
+                  style={{
+                    border: "1px solid #d1d5db",
+                    background: "#fff",
+                    padding: "6px 9px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontSize: 12,
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
