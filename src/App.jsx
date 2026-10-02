@@ -3,6 +3,8 @@ import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
 import AuthPanel from "./AuthPanel";
 import MyLibrary from "./MyLibrary";
+import Catalogue from "./Catalogue";
+import CatalogueAdmin from "./CatalogueAdmin";
 
 /* ========= ENV / CLIENTS ========= */
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -537,6 +539,7 @@ useEffect(() => {
   const [addingKey, setAddingKey] = useState("");
   const [watchlistTmdbIds, setWatchlistTmdbIds] = useState(new Set());
   const [favouriteTmdbIds, setFavouriteTmdbIds] = useState(new Set());
+  const [catalogueRefreshKey, setCatalogueRefreshKey] = useState(0);
 
 
   // Progress / toasts
@@ -1005,6 +1008,18 @@ const saveFavouriteFilm = async (film) => {
 
   setDiscover((prev) => [...prev]);
 }}
+/>
+<CatalogueAdmin
+  supabase={supabase}
+  session={session}
+  onCatalogueUpdated={() =>
+    setCatalogueRefreshKey((prev) => prev + 1)
+  }
+/>
+
+<Catalogue
+  supabase={supabase}
+  refreshKey={catalogueRefreshKey}
 />
 
       {isEnriching && (
