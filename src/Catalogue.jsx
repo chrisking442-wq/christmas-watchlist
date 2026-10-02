@@ -12,6 +12,8 @@ function normaliseProviderName(name = "") {
     "Netflix basic with Ads": "Netflix",
     "Disney Plus": "Disney+",
     "Paramount Plus": "Paramount+",
+    "Apple TV Plus": "Apple TV+",
+    "Sky Go": "Sky Go",
     "Apple TV Amazon Channel": "Apple TV (Prime Video Channel)",
   };
 
@@ -107,6 +109,7 @@ export default function Catalogue({
   const [films, setFilms] = useState([]);
   const [search, setSearch] = useState("");
   const [decade, setDecade] = useState("");
+  const [platform, setPlatform] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -493,6 +496,24 @@ export default function Catalogue({
     }
   }
 
+  function filmMatchesPlatform(film, selectedPlatform) {
+    if (!selectedPlatform) return true;
+
+    const providerData = watchProviders[film.tmdb_id];
+    if (!providerData) return false;
+
+    const providers = [
+      ...(providerData.flatrate || []),
+      ...(providerData.free || []),
+      ...(providerData.ads || []),
+    ];
+
+    return providers.some(
+      (provider) =>
+        normaliseProviderName(provider.provider_name) === selectedPlatform
+    );
+  }
+
   const filteredFilms = films.filter((film) => {
     const q = search.trim().toLowerCase();
 
@@ -505,7 +526,9 @@ export default function Catalogue({
       !decade ||
       (year >= Number(decade) && year < Number(decade) + 10);
 
-    return matchesSearch && matchesDecade;
+    const matchesPlatform = filmMatchesPlatform(film, platform);
+
+    return matchesSearch && matchesDecade && matchesPlatform;
   });
 
   return (
@@ -580,11 +603,35 @@ export default function Catalogue({
           <option value="1920">1920s</option>
         </select>
 
-        {(search || decade) && (
+        <select
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
+          style={{
+            padding: "8px 10px",
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            background: "#fff",
+          }}
+        >
+          <option value="">All platforms</option>
+          <option value="Netflix">Netflix</option>
+          <option value="Disney+">Disney+</option>
+          <option value="Prime Video">Prime Video</option>
+          <option value="Apple TV+">Apple TV+</option>
+          <option value="Paramount+">Paramount+</option>
+          <option value="NOW">NOW</option>
+          <option value="Sky Go">Sky Go</option>
+          <option value="BBC iPlayer">BBC iPlayer</option>
+          <option value="ITVX">ITVX</option>
+          <option value="Channel 4">Channel 4</option>
+        </select>
+
+        {(search || decade || platform) && (
           <button
             onClick={() => {
               setSearch("");
               setDecade("");
+              setPlatform("");
             }}
             style={{
               padding: "8px 10px",
@@ -598,6 +645,19 @@ export default function Catalogue({
           </button>
         )}
       </div>
+
+      {platform && (
+        <div
+          style={{
+            marginTop: -4,
+            marginBottom: 12,
+            fontSize: 11,
+            color: "#777",
+          }}
+        >
+          Platform results use UK availability already checked and cached so far.
+        </div>
+      )}
 
       {error && (
         <div style={{ color: "#b91c1c", marginBottom: 12 }}>
