@@ -86,7 +86,36 @@ function ProviderChips({ providers }) {
   );
 }
 
-function WhereToWatch({ availability }) {
+function formatCheckedAt(value) {
+  if (!value) return "";
+
+  const checked = new Date(value);
+
+  if (Number.isNaN(checked.getTime())) return "";
+
+  const today = new Date();
+
+  const sameDay =
+    checked.getFullYear() === today.getFullYear() &&
+    checked.getMonth() === today.getMonth() &&
+    checked.getDate() === today.getDate();
+
+  if (sameDay) return "Last checked today";
+
+  return `Last checked ${checked.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}`;
+}
+
+function WhereToWatch({
+  availability,
+  filmId,
+  alertActive,
+  alertSaving,
+  onToggleAlert,
+}) {
   if (!availability) {
     return (
       <div
@@ -146,15 +175,41 @@ function WhereToWatch({ availability }) {
       </div>
 
       {!hasStreaming ? (
-        <div
-          style={{
-            marginTop: 6,
-            fontSize: 12,
-            color: "#666",
-          }}
-        >
-          No UK subscription, free or ad-supported streaming option was found.
-        </div>
+        <>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 12,
+              color: "#555",
+              lineHeight: 1.4,
+            }}
+          >
+            Not currently included with a UK streaming service.
+          </div>
+
+          <button
+            onClick={() => onToggleAlert(filmId)}
+            disabled={alertSaving}
+            style={{
+              marginTop: 8,
+              border: alertActive
+                ? "1px solid #86efac"
+                : "1px solid #d1d5db",
+              background: alertActive ? "#f0fdf4" : "#fff",
+              padding: "6px 9px",
+              borderRadius: 8,
+              cursor: alertSaving ? "not-allowed" : "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            {alertSaving
+              ? "Saving…"
+              : alertActive
+              ? "🔔 Watching for availability"
+              : "🔔 Tell me when available"}
+          </button>
+        </>
       ) : (
         <>
           {subscription.length > 0 && (
@@ -217,9 +272,21 @@ function WhereToWatch({ availability }) {
         </div>
       )}
 
+      {availability.checkedAt && (
+        <div
+          style={{
+            marginTop: 7,
+            fontSize: 10,
+            color: "#777",
+          }}
+        >
+          {formatCheckedAt(availability.checkedAt)}
+        </div>
+      )}
+
       <div
         style={{
-          marginTop: 7,
+          marginTop: 4,
           fontSize: 10,
           color: "#888",
         }}
@@ -240,6 +307,8 @@ export default function MyLibrary({
   const [selectedList, setSelectedList] = useState(null);
   const [items, setItems] = useState([]);
   const [availabilityByFilmId, setAvailabilityByFilmId] = useState({});
+  const [alertFilmIds, setAlertFilmIds] = useState(new Set());
+  const [alertSavingFilmIds, setAlertSavingFilmIds] = useState(new Set());
   const [loadingLists, setLoadingLists] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState("");
@@ -250,6 +319,7 @@ export default function MyLibrary({
       setSelectedList(null);
       setItems([]);
       setAvailabilityByFilmId({});
+      setAlertFilmIds(new Set());
       return;
     }
 
@@ -273,7 +343,25 @@ export default function MyLibrary({
       setLoadingLists(false);
     }
 
+    async function loadAvailabilityAlerts() {
+      const { data, error } = await supabase
+        .from("v2_availability_alerts")
+        .select("film_id")
+        .eq("user_id", session.user.id)
+        .eq("active", true);
+
+      if (error) {
+        console.error("Couldn't load availability alerts:", error);
+        return;
+      }
+
+      setAlertFilmIds(
+        new Set((data || []).map((row) => String(row.film_id)))
+      );
+    }
+
     loadLists();
+    loadAvailabilityAlerts();
   }, [supabase, session]);
 
   async function loadAvailabilityForItems(listItems) {
@@ -374,6 +462,66 @@ export default function MyLibrary({
     await loadAvailabilityForItems(loadedItems);
 
     setLoadingItems(false);
+  }
+
+  async function toggleAvailabilityAlert(filmId) {
+    if (!filmId || !session?.user) return;
+
+    const key = String(filmId);
+    const active = alertFilmIds.has(key);
+
+    setAlertSavingFilmIds((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+
+    setError("");
+
+    try {
+      if (active) {
+        const { error } = await supabase
+          .from("v2_availability_alerts")
+          .delete()
+          .eq("user_id", session.user.id)
+          .eq("film_id", filmId);
+
+        if (error) throw error;
+
+        setAlertFilmIds((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      } else {
+        const { error } = await supabase
+          .from("v2_availability_alerts")
+          .insert({
+            user_id: session.user.id,
+            film_id: filmId,
+            active: true,
+          });
+
+        if (error) throw error;
+
+        setAlertFilmIds((prev) => {
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+      }
+    } catch (alertError) {
+      console.error(alertError);
+      setError(
+        "Couldn't update the availability alert: " + alertError.message
+      );
+    } finally {
+      setAlertSavingFilmIds((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
   }
 
   async function removeItem(itemId, tmdbId) {
@@ -490,8 +638,10 @@ export default function MyLibrary({
             >
               {items.map((item) => {
                 const film = item.v2_films;
+                const filmId = film?.id;
+                const filmKey = String(filmId || "");
                 const availability =
-                  availabilityByFilmId[String(film?.id)] || null;
+                  availabilityByFilmId[filmKey] || null;
 
                 return (
                   <div
@@ -552,7 +702,13 @@ export default function MyLibrary({
                         </div>
                       )}
 
-                      <WhereToWatch availability={availability} />
+                      <WhereToWatch
+                        availability={availability}
+                        filmId={filmId}
+                        alertActive={alertFilmIds.has(filmKey)}
+                        alertSaving={alertSavingFilmIds.has(filmKey)}
+                        onToggleAlert={toggleAvailabilityAlert}
+                      />
 
                       <button
                         onClick={() =>
