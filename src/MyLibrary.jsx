@@ -6,6 +6,7 @@ export default function MyLibrary({
   supabase,
   session,
   onWatchlistRemoved,
+  onFavouriteRemoved,
 }) {
   const [lists, setLists] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
@@ -103,6 +104,13 @@ if (
   tmdbId
 ) {
   onWatchlistRemoved(tmdbId);
+}
+if (
+  selectedList?.list_type === "favourites" &&
+  onFavouriteRemoved &&
+  tmdbId
+) {
+  onFavouriteRemoved(tmdbId);
 }
   
 }

@@ -479,6 +479,48 @@ useEffect(() => {
   loadWatchlistIds();
 }, [session]);
 
+// PASTE NEW FAVOURITES EFFECT HERE
+
+useEffect(() => {
+  if (!supabase || !session?.user) {
+    setFavouriteTmdbIds(new Set());
+    return;
+  }
+
+  async function loadFavouriteIds() {
+    const { data, error } = await supabase
+      .from("v2_list_items")
+      .select(`
+        film_id,
+        v2_lists!inner(
+          user_id,
+          list_type
+        ),
+        v2_films!inner(
+          tmdb_id
+        )
+      `)
+      .eq("v2_lists.user_id", session.user.id)
+      .eq("v2_lists.list_type", "favourites");
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setFavouriteTmdbIds(
+      new Set(
+        (data || [])
+          .map((x) => x.v2_films?.tmdb_id)
+          .filter(Boolean)
+      )
+    );
+  }
+
+  loadFavouriteIds();
+}, [session]);
+
+
   const [sheets, setSheets] = useState({});
   const [sheetName, setSheetName] = useState("");
   const [search, setSearch] = useState("");
@@ -494,6 +536,7 @@ useEffect(() => {
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [addingKey, setAddingKey] = useState("");
   const [watchlistTmdbIds, setWatchlistTmdbIds] = useState(new Set());
+  const [favouriteTmdbIds, setFavouriteTmdbIds] = useState(new Set());
 
 
   // Progress / toasts
@@ -877,6 +920,50 @@ const addRowToCurrentSheet = async (title, year, kind) => {
 
   setTimeout(() => setToast(null), 2500);
 };
+const saveFavouriteFilm = async (film) => {
+  if (!session?.user) {
+    setToast({ text: "Sign in to save favourites.", type: "" });
+    setTimeout(() => setToast(null), 2000);
+    return;
+  }
+
+  const { error } = await supabase.rpc(
+    "v2_save_film_to_special_list",
+    {
+      p_list_type: "favourites",
+      p_tmdb_id: film.id,
+      p_title: film.title,
+      p_original_title: film.originalTitle || null,
+      p_release_date: film.releaseDate || null,
+      p_overview: film.overview || null,
+      p_poster_path: film.posterPath || null,
+      p_backdrop_path: film.backdropPath || null,
+    }
+  );
+
+  if (error) {
+    console.error(error);
+
+    setToast({
+      text: "Couldn't add favourite: " + error.message,
+      type: "",
+    });
+  } else {
+    setFavouriteTmdbIds(
+      (prev) => new Set([...prev, film.id])
+    );
+
+    setDiscover((prev) => [...prev]);
+
+    setToast({
+      text: "Added to Favourites ♥",
+      type: "ok",
+    });
+  }
+
+  setTimeout(() => setToast(null), 2500);
+};
+
 
   /* ====== UI ====== */
   return (
@@ -909,6 +996,15 @@ const addRowToCurrentSheet = async (title, year, kind) => {
 
     setDiscover((prev) => [...prev]);
   }}
+  onFavouriteRemoved={(tmdbId) => {
+  setFavouriteTmdbIds((prev) => {
+    const next = new Set(prev);
+    next.delete(tmdbId);
+    return next;
+  });
+
+  setDiscover((prev) => [...prev]);
+}}
 />
 
       {isEnriching && (
@@ -1172,6 +1268,7 @@ const addRowToCurrentSheet = async (title, year, kind) => {
             const key = `${d.title}__${d.year}`;
             const isAdding = addingKey === String(d.id);
             const exists = watchlistTmdbIds.has(d.id);
+            const isFavourite = favouriteTmdbIds.has(d.id);
 
             return (
               <div
@@ -1226,28 +1323,61 @@ const addRowToCurrentSheet = async (title, year, kind) => {
                   </div>
                   <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>TMDB</div>
                   <div style={{ marginTop: 8 }}>
-                    {exists ? (
-                      <button
-                        disabled
-                        style={{ border: "1px solid #e5e7eb", padding: "6px 10px", borderRadius: 8 }}
-                      >
-                        Added ✓
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => saveDiscoveredFilm(d)}
-                        disabled={isAdding}
-                        style={{
-                          border: "1px solid #e5e7eb",
-                          padding: "6px 10px",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {isAdding ? "Adding…" : "Add"}
-                      </button>
-                    )}
-                  </div>
+  {exists ? (
+    <button
+      disabled
+      style={{
+        border: "1px solid #e5e7eb",
+        padding: "6px 10px",
+        borderRadius: 8,
+      }}
+    >
+      Added ✓
+    </button>
+  ) : (
+    <button
+      onClick={() => saveDiscoveredFilm(d)}
+      disabled={isAdding}
+      style={{
+        border: "1px solid #e5e7eb",
+        padding: "6px 10px",
+        borderRadius: 8,
+        cursor: "pointer",
+      }}
+    >
+      {isAdding ? "Adding…" : "Add"}
+    </button>
+  )}
+
+  <div style={{ marginTop: 8 }}>
+    {isFavourite ? (
+      <button
+        disabled
+        style={{
+          border: "1px solid #fecdd3",
+          background: "#fff1f2",
+          padding: "6px 10px",
+          borderRadius: 8,
+        }}
+      >
+        ♥ Favourite
+      </button>
+    ) : (
+      <button
+        onClick={() => saveFavouriteFilm(d)}
+        style={{
+          border: "1px solid #fecdd3",
+          background: "#fff",
+          padding: "6px 10px",
+          borderRadius: 8,
+          cursor: "pointer",
+        }}
+      >
+        ♡ Favourite
+      </button>
+    )}
+  </div>
+</div>
                 </div>
               </div>
             );
