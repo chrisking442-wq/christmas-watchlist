@@ -2,7 +2,15 @@ import React, { useEffect, useState } from "react";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 
-export default function Catalogue({ supabase, refreshKey }) {
+export default function Catalogue({
+  supabase,
+  refreshKey,
+  session,
+  watchlistTmdbIds,
+  favouriteTmdbIds,
+  onWatchlistAdded,
+  onFavouriteAdded,
+}) {
   const [films, setFilms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -53,7 +61,72 @@ export default function Catalogue({ supabase, refreshKey }) {
     loadCatalogue();
  }, [supabase, refreshKey]);
 
-  return (
+ async function addToWatchlist(film) {
+  if (!session?.user) {
+    alert("Sign in to save films.");
+    return;
+  }
+
+  const { error } = await supabase.rpc(
+    "v2_save_film_to_special_list",
+    {
+      p_list_type: "watchlist",
+      p_tmdb_id: film.tmdb_id,
+      p_title: film.title,
+      p_original_title: null,
+      p_release_date: film.release_year
+        ? `${film.release_year}-01-01`
+        : null,
+      p_overview: film.overview || null,
+      p_poster_path: film.poster_path || null,
+      p_backdrop_path: null,
+    }
+  );
+
+  if (error) {
+    console.error(error);
+    alert("Couldn't add film: " + error.message);
+    return;
+  }
+
+  if (onWatchlistAdded) {
+    onWatchlistAdded(film.tmdb_id);
+  }
+}
+
+async function addToFavourites(film) {
+  if (!session?.user) {
+    alert("Sign in to save favourites.");
+    return;
+  }
+
+  const { error } = await supabase.rpc(
+    "v2_save_film_to_special_list",
+    {
+      p_list_type: "favourites",
+      p_tmdb_id: film.tmdb_id,
+      p_title: film.title,
+      p_original_title: null,
+      p_release_date: film.release_year
+        ? `${film.release_year}-01-01`
+        : null,
+      p_overview: film.overview || null,
+      p_poster_path: film.poster_path || null,
+      p_backdrop_path: null,
+    }
+  );
+
+  if (error) {
+    console.error(error);
+    alert("Couldn't add favourite: " + error.message);
+    return;
+  }
+
+  if (onFavouriteAdded) {
+    onFavouriteAdded(film.tmdb_id);
+  }
+} 
+ return (
     <div
       style={{
         marginBottom: 22,
@@ -154,6 +227,69 @@ export default function Catalogue({ supabase, refreshKey }) {
                       : film.overview}
                   </div>
                 )}
+
+                <div
+  style={{
+    marginTop: 10,
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  }}
+>
+  {watchlistTmdbIds?.has(film.tmdb_id) ? (
+    <button
+      disabled
+      style={{
+        border: "1px solid #bbf7d0",
+        background: "#f0fdf4",
+        padding: "6px 9px",
+        borderRadius: 8,
+      }}
+    >
+      Added ✓
+    </button>
+  ) : (
+    <button
+      onClick={() => addToWatchlist(film)}
+      style={{
+        border: "1px solid #d1d5db",
+        background: "#fff",
+        padding: "6px 9px",
+        borderRadius: 8,
+        cursor: "pointer",
+      }}
+    >
+      Add to My Christmas List
+    </button>
+  )}
+
+  {favouriteTmdbIds?.has(film.tmdb_id) ? (
+    <button
+      disabled
+      style={{
+        border: "1px solid #fecdd3",
+        background: "#fff1f2",
+        padding: "6px 9px",
+        borderRadius: 8,
+      }}
+    >
+      ♥ Favourite
+    </button>
+  ) : (
+    <button
+      onClick={() => addToFavourites(film)}
+      style={{
+        border: "1px solid #fecdd3",
+        background: "#fff",
+        padding: "6px 9px",
+        borderRadius: 8,
+        cursor: "pointer",
+      }}
+    >
+      ♡ Favourite
+    </button>
+  )}
+</div>
 
                 <div
                   style={{

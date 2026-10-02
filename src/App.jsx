@@ -1020,6 +1020,19 @@ const saveFavouriteFilm = async (film) => {
 <Catalogue
   supabase={supabase}
   refreshKey={catalogueRefreshKey}
+  session={session}
+  watchlistTmdbIds={watchlistTmdbIds}
+  favouriteTmdbIds={favouriteTmdbIds}
+  onWatchlistAdded={(tmdbId) => {
+    setWatchlistTmdbIds(
+      (prev) => new Set([...prev, tmdbId])
+    );
+  }}
+  onFavouriteAdded={(tmdbId) => {
+    setFavouriteTmdbIds(
+      (prev) => new Set([...prev, tmdbId])
+    );
+  }}
 />
 
       {isEnriching && (
