@@ -973,7 +973,97 @@ const saveFavouriteFilm = async (film) => {
     <div style={{ padding:16, maxWidth:1200, margin:"0 auto" }}>
       {/* Simple header with cloud controls always visible */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:8 }}>
-        <h1 style={{ margin:0 }}>🎄 Christmas Watchlist</h1>
+        <div style={{ lineHeight: 1, display: "inline-block" }}>
+  <div
+    style={{
+      fontSize: "clamp(28px, 7vw, 46px)",
+      fontWeight: 800,
+      letterSpacing: "-1.5px",
+      color: "#123b2d",
+      position: "relative",
+      display: "inline-block",
+    }}
+  >
+    <span
+      style={{
+        position: "relative",
+        display: "inline-block",
+      }}
+    >
+      C
+
+      {/* Small Santa hat */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          width: 18,
+          height: 12,
+          background: "#a61b1b",
+          top: -7,
+          left: -1,
+          transform: "rotate(-18deg) skewX(-12deg)",
+          borderRadius: "10px 10px 2px 2px",
+        }}
+      />
+
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          width: 19,
+          height: 4,
+          background: "#f6f0e6",
+          top: 2,
+          left: -2,
+          transform: "rotate(-8deg)",
+          borderRadius: 10,
+        }}
+      />
+
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          width: 6,
+          height: 6,
+          background: "#f6f0e6",
+          borderRadius: "50%",
+          top: -6,
+          left: -5,
+        }}
+      />
+    </span>
+
+    heck It Twice
+  </div>
+
+  <div
+    style={{
+      marginTop: 7,
+      fontSize: "clamp(10px, 2.4vw, 13px)",
+      fontWeight: 600,
+      letterSpacing: "0.2em",
+      textTransform: "uppercase",
+      color: "#9b1c1c",
+    }}
+  >
+    The Ultimate Christmas Watchlist
+  </div>
+
+  <div
+    style={{
+      marginTop: 7,
+      height: 2,
+      width: "72%",
+      marginLeft: "14%",
+      background: "#a61b1b",
+      borderRadius: 10,
+      opacity: 0.8,
+      transform: "rotate(-1deg)",
+    }}
+  />
+</div>
                 <div style={{display:"none"}}>
           <input placeholder="Share/Load code" value={cloudCode} onChange={(e)=>setCloudCode(e.target.value.toUpperCase())}
                  style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8}} />
