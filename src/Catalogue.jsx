@@ -12,6 +12,7 @@ export default function Catalogue({
   onFavouriteAdded,
 }) {
   const [films, setFilms] = useState([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -126,7 +127,14 @@ async function addToFavourites(film) {
     onFavouriteAdded(film.tmdb_id);
   }
 } 
- return (
+const filteredFilms = films.filter((film) => {
+  const q = search.trim().toLowerCase();
+
+  if (!q) return true;
+
+  return (film.title || "").toLowerCase().includes(q);
+}); 
+return (
     <div
       style={{
         marginBottom: 22,
@@ -147,8 +155,22 @@ async function addToFavourites(film) {
       >
         {loading
           ? "Loading Christmas catalogue…"
-          : `${films.length} Christmas films`}
+: `${filteredFilms.length} of ${films.length} Christmas films`}
       </div>
+
+      <input
+  type="text"
+  placeholder="Search Christmas films..."
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+  style={{
+    marginBottom: 14,
+    width: "min(100%, 360px)",
+    padding: "8px 10px",
+    border: "1px solid #d1d5db",
+    borderRadius: 8,
+  }}
+/>
 
       {error && (
         <div style={{ color: "#b91c1c" }}>
@@ -171,7 +193,7 @@ async function addToFavourites(film) {
             gap: 12,
           }}
         >
-          {films.map((film) => (
+          {filteredFilms.map((film) => (
             <div
               key={film.id}
               style={{
