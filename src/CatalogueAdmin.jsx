@@ -87,25 +87,45 @@ export default function CatalogueAdmin({
         throw new Error("TMDB Christmas keyword could not be found.");
       }
 
-      const discovered = new Map();
+  const discovered = new Map();
 
-      // Start with five pages = up to 100 candidates.
-      for (let page = 1; page <= 5; page++) {
-        setStatus(`Finding Christmas films… page ${page} of 5`);
+const firstPage = await tmdb("/discover/movie", {
+  with_keywords: keywordId,
+  include_adult: "false",
+  language: "en-GB",
+  sort_by: "popularity.desc",
+  page: 1,
+});
 
-        const result = await tmdb("/discover/movie", {
-          with_keywords: keywordId,
-          include_adult: "false",
-          language: "en-GB",
-          sort_by: "popularity.desc",
-          page,
-        });
+for (const film of firstPage.results || []) {
+  discovered.set(film.id, film);
+}
 
-        for (const film of result.results || []) {
-          discovered.set(film.id, film);
-        }
-      }
+// TMDB tells us how many result pages exist.
+// For now, cap the catalogue import at 25 pages = up to 500 films.
+const pagesToFetch = Math.min(firstPage.total_pages || 1, 25);
 
+setStatus(
+  `Finding Christmas films… page 1 of ${pagesToFetch}`
+);
+
+for (let page = 2; page <= pagesToFetch; page++) {
+  setStatus(
+    `Finding Christmas films… page ${page} of ${pagesToFetch}`
+  );
+
+  const result = await tmdb("/discover/movie", {
+    with_keywords: keywordId,
+    include_adult: "false",
+    language: "en-GB",
+    sort_by: "popularity.desc",
+    page,
+  });
+
+  for (const film of result.results || []) {
+    discovered.set(film.id, film);
+  }
+}
       const films = [...discovered.values()];
 
       let saved = 0;
