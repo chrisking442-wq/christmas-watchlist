@@ -132,6 +132,10 @@ export default function Catalogue({
   const [filmDetailsByTmdbId, setFilmDetailsByTmdbId] = useState({});
   const [loadingFilmDetails, setLoadingFilmDetails] = useState(new Set());
   const [filmDetailErrors, setFilmDetailErrors] = useState({});
+  const [commercialProvidersByTmdbId, setCommercialProvidersByTmdbId] =
+    useState({});
+  const [loadingCommercialProviders, setLoadingCommercialProviders] =
+    useState(new Set());
   const [alertFilmIds, setAlertFilmIds] = useState(new Set());
   const [alertSavingFilmIds, setAlertSavingFilmIds] = useState(new Set());
   const [watchedByFilmId, setWatchedByFilmId] = useState({});
@@ -473,6 +477,84 @@ export default function Catalogue({
     }
 
     loadFilmDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFilm]);
+
+  useEffect(() => {
+    if (!selectedFilm?.tmdb_id || !TMDB_KEY) return;
+
+    const tmdbId = selectedFilm.tmdb_id;
+
+    if (commercialProvidersByTmdbId[tmdbId]) return;
+    if (loadingCommercialProviders.has(tmdbId)) return;
+
+    let cancelled = false;
+
+    async function loadCommercialProviders() {
+      setLoadingCommercialProviders((prev) => {
+        const next = new Set(prev);
+        next.add(tmdbId);
+        return next;
+      });
+
+      try {
+        const response = await fetch(
+          `https://api.themoviedb.org/3/movie/${tmdbId}/watch/providers?api_key=${TMDB_KEY}`
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `TMDB watch provider request failed (${response.status})`
+          );
+        }
+
+        const data = await response.json();
+        const gb = data?.results?.GB || {};
+
+        const rent = uniqueProviders(
+          (gb.rent || []).map((provider) => ({
+            ...provider,
+            provider_name: normaliseProviderName(provider.provider_name),
+          }))
+        );
+
+        const buy = uniqueProviders(
+          (gb.buy || []).map((provider) => ({
+            ...provider,
+            provider_name: normaliseProviderName(provider.provider_name),
+          }))
+        );
+
+        if (!cancelled) {
+          setCommercialProvidersByTmdbId((prev) => ({
+            ...prev,
+            [tmdbId]: { rent, buy },
+          }));
+        }
+      } catch (error) {
+        console.warn("Couldn't load UK rent/buy availability:", error);
+
+        if (!cancelled) {
+          setCommercialProvidersByTmdbId((prev) => ({
+            ...prev,
+            [tmdbId]: { rent: [], buy: [] },
+          }));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCommercialProviders((prev) => {
+            const next = new Set(prev);
+            next.delete(tmdbId);
+            return next;
+          });
+        }
+      }
+    }
+
+    loadCommercialProviders();
 
     return () => {
       cancelled = true;
@@ -934,13 +1016,17 @@ export default function Catalogue({
           width: 100%;
           min-width: 0;
           border: 1px solid #d8d3ca;
-          background: rgba(255, 255, 255, 0.9);
+          background: rgba(255, 255, 255, 0.94);
           color: #18382f;
           padding: 12px 14px;
           border-radius: 11px;
           outline: none;
           box-sizing: border-box;
-          box-shadow: 0 1px 2px rgba(28, 42, 35, 0.03);
+          box-shadow: 0 2px 7px rgba(28, 42, 35, 0.035);
+          transition:
+            border-color .16s ease,
+            box-shadow .16s ease,
+            background .16s ease;
         }
 
         .cit-catalogue-search:focus {
@@ -973,13 +1059,22 @@ export default function Catalogue({
         .cit-filter-chip {
           flex: 0 0 auto;
           border: 1px solid #d8d3ca;
-          background: rgba(255,255,255,.72);
+          background: rgba(255,255,255,.76);
           color: #40574f;
           border-radius: 999px;
           padding: 7px 11px;
           cursor: pointer;
           font-size: 12px;
           font-weight: 650;
+          transition:
+            border-color .16s ease,
+            background .16s ease,
+            color .16s ease,
+            transform .16s ease;
+        }
+
+        .cit-filter-chip:active {
+          transform: scale(.98);
         }
 
         .cit-filter-chip:hover {
@@ -1001,7 +1096,7 @@ export default function Catalogue({
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 12px;
+          gap: 7px;
           min-height: 24px;
           margin-bottom: 12px;
           color: #68756f;
@@ -1038,9 +1133,13 @@ export default function Catalogue({
         }
 
         .cit-film-card:hover {
-          transform: translateY(-2px);
+          transform: translateY(-4px);
           border-color: #d1cbbf;
-          box-shadow: 0 9px 22px rgba(32, 43, 37, 0.08);
+          box-shadow: 0 14px 28px rgba(32, 43, 37, 0.10);
+        }
+
+        .cit-film-card:hover .cit-poster {
+          transform: scale(1.025);
         }
 
         .cit-poster-wrap {
@@ -1055,6 +1154,7 @@ export default function Catalogue({
           width: 100%;
           height: 100%;
           object-fit: cover;
+          transition: transform .22s ease;
         }
 
         .cit-poster-placeholder {
@@ -1098,6 +1198,20 @@ export default function Catalogue({
           font-size: 18px;
           box-shadow: 0 3px 10px rgba(0,0,0,.12);
           backdrop-filter: blur(8px);
+          transition:
+            transform .16s ease,
+            box-shadow .16s ease,
+            background .16s ease;
+        }
+
+        .cit-heart:hover:not([disabled]) {
+          transform: scale(1.06);
+          box-shadow: 0 5px 14px rgba(0,0,0,.15);
+        }
+
+        .cit-heart:focus-visible {
+          outline: 3px solid rgba(143, 39, 48, .16);
+          outline-offset: 2px;
         }
 
         .cit-heart[disabled] {
@@ -1151,6 +1265,7 @@ export default function Catalogue({
           padding: 4px 7px;
           font-size: 10px;
           line-height: 1;
+          box-shadow: 0 1px 3px rgba(28, 42, 35, .035);
         }
 
         .cit-provider-badge img {
@@ -1190,6 +1305,15 @@ export default function Catalogue({
           cursor: pointer;
           font-size: 12px;
           font-weight: 750;
+          transition:
+            transform .16s ease,
+            background .16s ease,
+            box-shadow .16s ease;
+        }
+
+        .cit-my-list:hover:not(.cit-my-list--added) {
+          transform: translateY(-1px);
+          box-shadow: 0 5px 12px rgba(18, 59, 45, .12);
         }
 
         .cit-my-list:hover {
@@ -1297,15 +1421,15 @@ export default function Catalogue({
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 22px;
+          padding: 10px;
           background: rgba(22, 30, 26, 0.54);
           backdrop-filter: blur(6px);
         }
 
         .cit-detail-modal {
           position: relative;
-          width: min(920px, 100%);
-          max-height: min(88vh, 860px);
+          width: min(980px, 100%);
+          max-height: calc(100vh - 20px);
           overflow: auto;
           border: 1px solid #ddd8cf;
           border-radius: 18px;
@@ -1315,7 +1439,7 @@ export default function Catalogue({
 
         .cit-detail-hero {
           position: relative;
-          min-height: 170px;
+          min-height: 150px;
           overflow: hidden;
           border-radius: 18px 18px 0 0;
           background: #e8e4dd;
@@ -1345,7 +1469,7 @@ export default function Catalogue({
           position: relative;
           z-index: 1;
           max-width: 600px;
-          padding: 42px 58px 34px 34px;
+          padding: 34px 58px 26px 30px;
           color: #fff;
         }
 
@@ -1378,13 +1502,23 @@ export default function Catalogue({
           cursor: pointer;
           font-size: 18px;
           box-shadow: 0 4px 14px rgba(0,0,0,.12);
+          transition:
+            transform .16s ease,
+            box-shadow .16s ease,
+            background .16s ease;
+        }
+
+        .cit-detail-close:hover {
+          transform: scale(1.05);
+          background: #fff;
+          box-shadow: 0 6px 18px rgba(0,0,0,.16);
         }
 
         .cit-detail-content {
           display: grid;
-          grid-template-columns: 210px minmax(0, 1fr);
-          gap: 24px;
-          padding: 24px;
+          grid-template-columns: 195px minmax(0, 1fr);
+          gap: 20px;
+          padding: 20px;
         }
 
         .cit-detail-poster {
@@ -1429,8 +1563,59 @@ export default function Catalogue({
           font-size: 11px;
         }
 
+
+        .cit-detail-skeleton {
+          display: grid;
+          gap: 7px;
+          margin-bottom: 14px;
+        }
+
+        .cit-detail-skeleton-line {
+          height: 9px;
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              90deg,
+              #ece8e1 25%,
+              #f7f4ef 40%,
+              #ece8e1 55%
+            );
+          background-size: 260% 100%;
+          animation: citDetailShimmer 1.2s ease-in-out infinite;
+        }
+
+        .cit-detail-skeleton-line:nth-child(1) {
+          width: 72%;
+        }
+
+        .cit-detail-skeleton-line:nth-child(2) {
+          width: 94%;
+        }
+
+        .cit-detail-skeleton-line:nth-child(3) {
+          width: 60%;
+        }
+
+        @keyframes citDetailShimmer {
+          0% {
+            background-position: 100% 0;
+          }
+          100% {
+            background-position: -100% 0;
+          }
+        }
+
+        .cit-detail-commercial-heading {
+          margin: 13px 0 6px;
+          color: #66736d;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .07em;
+        }
+
         .cit-detail-tagline {
-          margin: 0 0 10px;
+          margin: 0 0 8px;
           color: #52635c;
           font-size: 13px;
           font-style: italic;
@@ -1543,8 +1728,8 @@ export default function Catalogue({
         }
 
         .cit-detail-watch {
-          margin-top: 24px;
-          padding-top: 20px;
+          margin-top: 18px;
+          padding-top: 15px;
           border-top: 1px solid #e5e0d8;
         }
 
@@ -1560,14 +1745,18 @@ export default function Catalogue({
         }
 
         .cit-detail-provider-group {
-          padding: 10px 11px;
+          display: grid;
+          grid-template-columns: 78px minmax(0, 1fr);
+          gap: 8px;
+          align-items: center;
+          padding: 8px 10px;
           border: 1px solid #e1ddd5;
           border-radius: 10px;
           background: rgba(255,255,255,.7);
         }
 
         .cit-detail-provider-label {
-          margin-bottom: 7px;
+          margin-bottom: 0;
           color: #7b847f;
           font-size: 10px;
           font-weight: 750;
@@ -1607,7 +1796,7 @@ export default function Catalogue({
           display: flex;
           align-items: center;
           gap: 6px;
-          margin-top: 12px;
+          margin-top: 8px;
           flex-wrap: wrap;
           color: #969c98;
           font-size: 10px;
@@ -1628,6 +1817,17 @@ export default function Catalogue({
         .cit-detail-checked {
           color: #969c98;
           font-size: 10px;
+        }
+
+        @media (hover: none) {
+          .cit-film-card:hover {
+            transform: none;
+            box-shadow: 0 3px 12px rgba(32, 43, 37, 0.045);
+          }
+
+          .cit-film-card:hover .cit-poster {
+            transform: none;
+          }
         }
 
         @media (max-width: 1050px) {
@@ -1695,18 +1895,22 @@ export default function Catalogue({
 
           .cit-detail-modal {
             width: 100%;
-            max-height: 92vh;
+            max-height: 94dvh;
             border-radius: 18px 18px 0 0;
             border-bottom: 0;
           }
 
           .cit-detail-hero {
-            min-height: 145px;
+            min-height: 132px;
             border-radius: 18px 18px 0 0;
           }
 
           .cit-detail-heading {
-            padding: 46px 54px 24px 18px;
+            padding: 42px 54px 20px 18px;
+          }
+
+          .cit-detail-heading h2 {
+            font-size: clamp(25px, 8vw, 32px);
           }
 
           .cit-detail-content {
@@ -1720,18 +1924,135 @@ export default function Catalogue({
             line-height: 1.55;
           }
 
+          .cit-detail-provider-group {
+            display: block;
+          }
+
+          .cit-detail-provider-label {
+            margin-bottom: 7px;
+          }
+
 
           .cit-detail-credit-row {
             grid-template-columns: 58px 1fr;
           }
 
-          .cit-detail-actions {
+          .cit-detail-copy {
+            display: contents;
+          }
+
+          .cit-detail-content {
+            grid-template-columns: 78px minmax(0, 1fr);
+            gap: 10px 12px;
+            padding: 14px;
+          }
+
+          .cit-detail-content > div:first-child {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+          }
+
+          .cit-detail-poster {
+            border-radius: 9px;
+          }
+
+          .cit-detail-metadata,
+          .cit-detail-skeleton {
+            grid-column: 2;
+            margin-bottom: 0;
+          }
+
+          .cit-detail-metadata {
+            gap: 5px 10px;
+          }
+
+          .cit-detail-metadata span + span::before {
+            content: none;
+            margin-right: 0;
+          }
+
+          .cit-detail-metadata span:last-child {
+            flex-basis: 100%;
+          }
+
+          .cit-detail-tagline {
+            grid-column: 2;
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+
+          .cit-detail-overview,
+          .cit-detail-credits,
+          .cit-detail-imdb,
+          .cit-detail-loading,
+          .cit-detail-actions,
+          .cit-detail-watch {
             grid-column: 1 / -1;
           }
 
-          .cit-detail-watch {
+          .cit-detail-overview {
+            margin-top: 2px;
+          }
+
+          .cit-detail-credits {
+            margin-top: 4px;
+            padding: 10px 11px;
+          }
+
+          .cit-detail-imdb {
+            margin-top: 0;
+          }
+
+          .cit-detail-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 4px;
+          }
+
+          .cit-detail-actions > .cit-detail-primary {
             grid-column: 1 / -1;
-            margin-top: 8px;
+          }
+
+          .cit-detail-actions > .cit-detail-secondary,
+          .cit-detail-actions > div,
+          .cit-detail-watched {
+            width: 100%;
+            box-sizing: border-box;
+          }
+
+          .cit-detail-primary,
+          .cit-detail-secondary,
+          .cit-detail-watched {
+            min-height: 40px;
+            padding: 9px 8px;
+          }
+
+          .cit-detail-watch {
+            margin-top: 4px;
+            padding-top: 14px;
+          }
+
+          .cit-detail-watch h3 {
+            margin-bottom: 8px;
+            font-size: 14px;
+          }
+
+          .cit-detail-watch-grid {
+            gap: 7px;
+          }
+
+          .cit-detail-provider-group {
+            display: grid;
+            grid-template-columns: 70px minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+            padding: 8px 9px;
+          }
+
+          .cit-detail-provider-label {
+            margin-bottom: 0;
           }
         }
 
@@ -2116,6 +2437,13 @@ export default function Catalogue({
         const releaseDateText = formatReleaseDate(
           richDetails?.releaseDate
         );
+        const commercialProviders =
+          commercialProvidersByTmdbId[selectedFilm.tmdb_id] || {
+            rent: [],
+            buy: [],
+          };
+        const commercialLoading =
+          loadingCommercialProviders.has(selectedFilm.tmdb_id);
 
         return (
           <div
@@ -2179,8 +2507,13 @@ export default function Catalogue({
 
                 <div className="cit-detail-copy">
                   {richDetailsLoading && (
-                    <div className="cit-detail-loading">
-                      Loading film details…
+                    <div
+                      className="cit-detail-skeleton"
+                      aria-label="Loading film details"
+                    >
+                      <div className="cit-detail-skeleton-line" />
+                      <div className="cit-detail-skeleton-line" />
+                      <div className="cit-detail-skeleton-line" />
                     </div>
                   )}
 
@@ -2369,6 +2702,45 @@ export default function Catalogue({
                             />
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {(commercialProviders.rent.length > 0 ||
+                      commercialProviders.buy.length > 0) && (
+                      <>
+                        <div className="cit-detail-commercial-heading">
+                          Rent or buy
+                        </div>
+
+                        {commercialProviders.rent.length > 0 && (
+                          <div className="cit-detail-provider-group">
+                            <div className="cit-detail-provider-label">
+                              Rent
+                            </div>
+                            <ProviderBadges
+                              providers={commercialProviders.rent}
+                              max={12}
+                            />
+                          </div>
+                        )}
+
+                        {commercialProviders.buy.length > 0 && (
+                          <div className="cit-detail-provider-group">
+                            <div className="cit-detail-provider-label">
+                              Buy
+                            </div>
+                            <ProviderBadges
+                              providers={commercialProviders.buy}
+                              max={12}
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {commercialLoading && (
+                      <div className="cit-detail-loading">
+                        Checking rent and buy options…
                       </div>
                     )}
 

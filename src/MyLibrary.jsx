@@ -746,6 +746,25 @@ export default function MyLibrary({
           border-radius: 14px;
           background: rgba(255,255,255,.9);
           box-shadow: 0 3px 12px rgba(32, 43, 37, 0.045);
+          transition:
+            transform .16s ease,
+            box-shadow .16s ease,
+            border-color .16s ease;
+        }
+
+        .cit-library-card:hover {
+          transform: translateY(-4px);
+          border-color: #d1cbbf;
+          box-shadow: 0 14px 28px rgba(32, 43, 37, .10);
+        }
+
+        .cit-library-card:hover .cit-library-poster {
+          transform: scale(1.025);
+        }
+
+        .cit-library-card:focus-visible {
+          outline: 3px solid rgba(18, 59, 45, .16);
+          outline-offset: 3px;
         }
 
         .cit-library-poster-wrap {
@@ -776,6 +795,7 @@ export default function MyLibrary({
           height: 100%;
           display: block;
           object-fit: cover;
+          transition: transform .22s ease;
         }
 
         .cit-library-no-poster {
@@ -833,6 +853,7 @@ export default function MyLibrary({
           padding: 4px 7px;
           font-size: 10px;
           line-height: 1;
+          box-shadow: 0 1px 3px rgba(28, 42, 35, .035);
         }
 
         .cit-library-provider img {
@@ -872,6 +893,15 @@ export default function MyLibrary({
           cursor: pointer;
           font-size: 10px;
           font-weight: 700;
+          transition:
+            background .16s ease,
+            border-color .16s ease,
+            transform .16s ease;
+        }
+
+        .cit-library-alert-button:hover {
+          transform: translateY(-1px);
+          border-color: #95b5a5;
         }
 
         .cit-library-alert-button--active {
@@ -895,6 +925,14 @@ export default function MyLibrary({
           cursor: pointer;
           font-size: 10px;
           font-weight: 750;
+          transition:
+            transform .16s ease,
+            background .16s ease;
+        }
+
+        .cit-library-watched-button:hover:not([disabled]) {
+          transform: translateY(-1px);
+          background: #e4f2ea;
         }
 
         .cit-library-watched-button[disabled] {
@@ -955,6 +993,17 @@ export default function MyLibrary({
           cursor: pointer;
           font-size: 12px;
           font-weight: 750;
+        }
+
+        @media (hover: none) {
+          .cit-library-card:hover {
+            transform: none;
+            box-shadow: 0 3px 12px rgba(32, 43, 37, 0.045);
+          }
+
+          .cit-library-card:hover .cit-library-poster {
+            transform: none;
+          }
         }
 
         @media (max-width: 1050px) {

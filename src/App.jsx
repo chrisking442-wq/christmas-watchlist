@@ -1064,13 +1064,18 @@ const saveFavouriteFilm = async (film) => {
         }
 
         .cit-header {
+          position: sticky;
+          top: 0;
+          z-index: 1100;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 24px;
-          padding: 10px 0 16px;
+          padding: 10px 0 12px;
           margin-bottom: 12px;
-          border-bottom: 1px solid #e4ded4;
+          border-bottom: 1px solid rgba(218, 211, 200, .9);
+          background: rgba(247, 244, 238, .94);
+          backdrop-filter: blur(14px);
         }
 
         .cit-logo-button {
@@ -1080,6 +1085,18 @@ const saveFavouriteFilm = async (film) => {
           text-align: left;
           cursor: pointer;
           color: inherit;
+          transition: opacity .16s ease, transform .16s ease;
+        }
+
+        .cit-logo-button:hover {
+          opacity: .92;
+          transform: translateY(-1px);
+        }
+
+        .cit-logo-button:focus-visible {
+          outline: 3px solid rgba(18, 59, 45, .14);
+          outline-offset: 5px;
+          border-radius: 8px;
         }
 
         .cit-header-actions {
@@ -1108,6 +1125,16 @@ const saveFavouriteFilm = async (film) => {
           cursor: pointer;
           font-size: 14px;
           font-weight: 650;
+          transition:
+            background .16s ease,
+            color .16s ease,
+            box-shadow .16s ease,
+            transform .16s ease;
+        }
+
+        .cit-nav-button:focus-visible {
+          outline: 3px solid rgba(18, 59, 45, .13);
+          outline-offset: 2px;
         }
 
         .cit-nav-button:hover {
@@ -1118,6 +1145,7 @@ const saveFavouriteFilm = async (film) => {
         .cit-nav-button--primary {
           background: #123b2d;
           color: white;
+          box-shadow: 0 3px 9px rgba(18, 59, 45, .16);
         }
 
         .cit-nav-button--primary:hover {
@@ -1147,12 +1175,23 @@ const saveFavouriteFilm = async (film) => {
           cursor: pointer;
           font-size: 13px;
           font-weight: 800;
-          box-shadow: 0 1px 3px rgba(28, 42, 35, 0.06);
+          box-shadow: 0 2px 7px rgba(28, 42, 35, 0.07);
+          transition:
+            transform .16s ease,
+            border-color .16s ease,
+            box-shadow .16s ease;
         }
 
         .cit-account-button:hover {
+          transform: translateY(-1px);
           border-color: #aebbb5;
           background: #fbfaf7;
+          box-shadow: 0 5px 13px rgba(28, 42, 35, 0.10);
+        }
+
+        .cit-account-button:focus-visible {
+          outline: 3px solid rgba(18, 59, 45, .13);
+          outline-offset: 2px;
         }
 
         .cit-account-menu {
@@ -1256,10 +1295,21 @@ const saveFavouriteFilm = async (film) => {
           cursor: pointer;
           font-weight: 700;
           box-shadow: 0 3px 10px rgba(18, 59, 45, 0.12);
+          transition:
+            transform .16s ease,
+            background .16s ease,
+            box-shadow .16s ease;
         }
 
         .cit-search-all:hover {
+          transform: translateY(-1px);
           background: #0d3024;
+          box-shadow: 0 6px 16px rgba(18, 59, 45, .16);
+        }
+
+        .cit-search-all:focus-visible {
+          outline: 3px solid rgba(18, 59, 45, .14);
+          outline-offset: 3px;
         }
 
         .cit-admin {
@@ -1291,6 +1341,17 @@ const saveFavouriteFilm = async (film) => {
 
         .cit-mobile-nav {
           display: none;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            scroll-behavior: auto !important;
+            transition-duration: .01ms !important;
+            animation-duration: .01ms !important;
+            animation-iteration-count: 1 !important;
+          }
         }
 
         @media (max-width: 720px) {
@@ -1337,17 +1398,17 @@ const saveFavouriteFilm = async (film) => {
             position: fixed;
             left: 10px;
             right: 10px;
-            bottom: 10px;
+            bottom: max(10px, env(safe-area-inset-bottom));
             z-index: 1200;
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 4px;
             padding: 5px;
             border: 1px solid #ded8cf;
-            border-radius: 16px;
-            background: rgba(255, 253, 249, 0.96);
-            box-shadow: 0 10px 28px rgba(35, 48, 42, 0.16);
-            backdrop-filter: blur(14px);
+            border-radius: 17px;
+            background: rgba(255, 253, 249, 0.97);
+            box-shadow: 0 12px 32px rgba(35, 48, 42, 0.18);
+            backdrop-filter: blur(16px);
           }
 
           .cit-mobile-nav button {
@@ -1355,15 +1416,25 @@ const saveFavouriteFilm = async (film) => {
             border-radius: 11px;
             background: transparent;
             color: #365047;
-            padding: 9px 5px;
+            padding: 10px 4px;
             cursor: pointer;
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 720;
+            line-height: 1.15;
+            transition:
+              background .16s ease,
+              color .16s ease,
+              transform .16s ease;
+          }
+
+          .cit-mobile-nav button:active {
+            transform: scale(.98);
           }
 
           .cit-mobile-nav-button--active {
             background: #123b2d !important;
             color: #fff !important;
+            box-shadow: 0 3px 9px rgba(18, 59, 45, .16);
           }
         }
       `}</style>

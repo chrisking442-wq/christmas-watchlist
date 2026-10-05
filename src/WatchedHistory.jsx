@@ -163,6 +163,25 @@ export default function WatchedHistory({
           border-radius: 14px;
           background: rgba(255,255,255,.9);
           box-shadow: 0 3px 12px rgba(32,43,37,.045);
+          transition:
+            transform .16s ease,
+            box-shadow .16s ease,
+            border-color .16s ease;
+        }
+
+        .cit-watched-card:hover {
+          transform: translateY(-4px);
+          border-color: #d1cbbf;
+          box-shadow: 0 14px 28px rgba(32,43,37,.10);
+        }
+
+        .cit-watched-card:hover .cit-watched-poster {
+          transform: scale(1.025);
+        }
+
+        .cit-watched-card:focus-visible {
+          outline: 3px solid rgba(18, 59, 45, .16);
+          outline-offset: 3px;
         }
 
         .cit-watched-poster-wrap {
@@ -177,6 +196,7 @@ export default function WatchedHistory({
           height: 100%;
           display: block;
           object-fit: cover;
+          transition: transform .22s ease;
         }
 
         .cit-watched-no-poster {
@@ -280,6 +300,17 @@ export default function WatchedHistory({
 
         .cit-watched-error {
           color: #a22626;
+        }
+
+        @media (hover: none) {
+          .cit-watched-card:hover {
+            transform: none;
+            box-shadow: 0 3px 12px rgba(32,43,37,.045);
+          }
+
+          .cit-watched-card:hover .cit-watched-poster {
+            transform: none;
+          }
         }
 
         @media (max-width: 1050px) {

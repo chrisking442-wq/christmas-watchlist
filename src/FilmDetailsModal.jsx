@@ -151,6 +151,14 @@ export default function FilmDetailsModal({
     checked: false,
   });
 
+  const [commercialAvailability, setCommercialAvailability] = useState({
+    rent: [],
+    buy: [],
+    loaded: false,
+  });
+  const [loadingCommercialAvailability, setLoadingCommercialAvailability] =
+    useState(false);
+
   const [refreshingAvailability, setRefreshingAvailability] =
     useState(false);
 
@@ -338,6 +346,84 @@ export default function FilmDetailsModal({
       cancelled = true;
     };
   }, [supabase, film]);
+
+  useEffect(() => {
+    if (!film?.tmdb_id || !TMDB_KEY) {
+      setCommercialAvailability({
+        rent: [],
+        buy: [],
+        loaded: true,
+      });
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadCommercialAvailability() {
+      setLoadingCommercialAvailability(true);
+
+      try {
+        const response = await fetch(
+          `https://api.themoviedb.org/3/movie/${film.tmdb_id}/watch/providers?api_key=${TMDB_KEY}`
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `TMDB watch provider request failed (${response.status})`
+          );
+        }
+
+        const data = await response.json();
+        const gb = data?.results?.GB || {};
+
+        const rent = uniqueProviders(
+          (gb.rent || []).map((provider) => ({
+            provider_id: provider.provider_id ?? null,
+            provider_name: normaliseProviderName(provider.provider_name),
+            provider_type: "rent",
+            logo_path: provider.logo_path || null,
+          }))
+        );
+
+        const buy = uniqueProviders(
+          (gb.buy || []).map((provider) => ({
+            provider_id: provider.provider_id ?? null,
+            provider_name: normaliseProviderName(provider.provider_name),
+            provider_type: "buy",
+            logo_path: provider.logo_path || null,
+          }))
+        );
+
+        if (!cancelled) {
+          setCommercialAvailability({
+            rent,
+            buy,
+            loaded: true,
+          });
+        }
+      } catch (error) {
+        console.warn("Couldn't load UK rent/buy availability:", error);
+
+        if (!cancelled) {
+          setCommercialAvailability({
+            rent: [],
+            buy: [],
+            loaded: true,
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCommercialAvailability(false);
+        }
+      }
+    }
+
+    loadCommercialAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [film]);
 
   useEffect(() => {
     if (!supabase || !session?.user || !film?.id) return;
@@ -633,15 +719,15 @@ export default function FilmDetailsModal({
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 22px;
+          padding: 10px;
           background: rgba(22,30,26,.54);
           backdrop-filter: blur(6px);
         }
 
         .cit-shared-detail-modal {
           position: relative;
-          width: min(920px, 100%);
-          max-height: min(88vh, 860px);
+          width: min(980px, 100%);
+          max-height: calc(100vh - 20px);
           overflow: auto;
           border: 1px solid #ddd8cf;
           border-radius: 18px;
@@ -651,7 +737,7 @@ export default function FilmDetailsModal({
 
         .cit-shared-detail-hero {
           position: relative;
-          min-height: 170px;
+          min-height: 150px;
           overflow: hidden;
           border-radius: 18px 18px 0 0;
           background: #e8e4dd;
@@ -680,7 +766,7 @@ export default function FilmDetailsModal({
           position: relative;
           z-index: 1;
           max-width: 620px;
-          padding: 42px 58px 34px 34px;
+          padding: 34px 58px 26px 30px;
           color: #fff;
         }
 
@@ -713,13 +799,28 @@ export default function FilmDetailsModal({
           cursor: pointer;
           font-size: 18px;
           box-shadow: 0 4px 14px rgba(0,0,0,.12);
+          transition:
+            transform .16s ease,
+            box-shadow .16s ease,
+            background .16s ease;
+        }
+
+        .cit-shared-detail-close:hover {
+          transform: scale(1.05);
+          background: #fff;
+          box-shadow: 0 6px 18px rgba(0,0,0,.16);
+        }
+
+        .cit-shared-detail-close:focus-visible {
+          outline: 3px solid rgba(255,255,255,.75);
+          outline-offset: 2px;
         }
 
         .cit-shared-detail-content {
           display: grid;
-          grid-template-columns: 210px minmax(0, 1fr);
-          gap: 24px;
-          padding: 24px;
+          grid-template-columns: 195px minmax(0, 1fr);
+          gap: 20px;
+          padding: 20px;
         }
 
         .cit-shared-detail-poster {
@@ -751,7 +852,7 @@ export default function FilmDetailsModal({
         }
 
         .cit-shared-detail-tagline {
-          margin: 0 0 10px;
+          margin: 0 0 8px;
           color: #52635c;
           font-size: 13px;
           font-style: italic;
@@ -815,6 +916,22 @@ export default function FilmDetailsModal({
           cursor: pointer;
           font-size: 12px;
           font-weight: 750;
+          transition:
+            transform .16s ease,
+            background .16s ease,
+            border-color .16s ease,
+            box-shadow .16s ease;
+        }
+
+        .cit-shared-detail-primary:hover:not([disabled]),
+        .cit-shared-detail-secondary:hover:not([disabled]),
+        .cit-shared-detail-watched:hover:not([disabled]) {
+          transform: translateY(-1px);
+        }
+
+        .cit-shared-detail-primary:hover:not([disabled]) {
+          background: #0d3024;
+          box-shadow: 0 5px 12px rgba(18, 59, 45, .12);
         }
 
         .cit-shared-detail-primary {
@@ -856,11 +973,12 @@ export default function FilmDetailsModal({
           margin-top: 6px;
           color: #7c8681;
           font-size: 10px;
+          box-shadow: 0 1px 3px rgba(28, 42, 35, .035);
         }
 
         .cit-shared-detail-watch {
-          margin-top: 24px;
-          padding-top: 20px;
+          margin-top: 18px;
+          padding-top: 15px;
           border-top: 1px solid #e5e0d8;
         }
 
@@ -871,18 +989,22 @@ export default function FilmDetailsModal({
         }
 
         .cit-shared-detail-provider-group {
-          padding: 10px 11px;
+          display: grid;
+          grid-template-columns: 78px minmax(0, 1fr);
+          gap: 8px;
+          align-items: center;
+          padding: 8px 10px;
           border: 1px solid #e1ddd5;
           border-radius: 10px;
           background: rgba(255,255,255,.7);
         }
 
         .cit-shared-detail-provider-group + .cit-shared-detail-provider-group {
-          margin-top: 10px;
+          margin-top: 7px;
         }
 
         .cit-shared-detail-provider-label {
-          margin-bottom: 7px;
+          margin-bottom: 0;
           color: #7b847f;
           font-size: 10px;
           font-weight: 750;
@@ -945,7 +1067,7 @@ export default function FilmDetailsModal({
           display: flex;
           align-items: center;
           gap: 6px;
-          margin-top: 12px;
+          margin-top: 8px;
           flex-wrap: wrap;
           color: #969c98;
           font-size: 10px;
@@ -969,6 +1091,57 @@ export default function FilmDetailsModal({
           margin-bottom: 10px;
         }
 
+
+        .cit-shared-skeleton {
+          display: grid;
+          gap: 7px;
+          margin-bottom: 14px;
+        }
+
+        .cit-shared-skeleton-line {
+          height: 9px;
+          border-radius: 999px;
+          background:
+            linear-gradient(
+              90deg,
+              #ece8e1 25%,
+              #f7f4ef 40%,
+              #ece8e1 55%
+            );
+          background-size: 260% 100%;
+          animation: citSharedShimmer 1.2s ease-in-out infinite;
+        }
+
+        .cit-shared-skeleton-line:nth-child(1) {
+          width: 72%;
+        }
+
+        .cit-shared-skeleton-line:nth-child(2) {
+          width: 94%;
+        }
+
+        .cit-shared-skeleton-line:nth-child(3) {
+          width: 60%;
+        }
+
+        @keyframes citSharedShimmer {
+          0% {
+            background-position: 100% 0;
+          }
+          100% {
+            background-position: -100% 0;
+          }
+        }
+
+        .cit-shared-commercial-heading {
+          margin: 13px 0 6px;
+          color: #66736d;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .07em;
+        }
+
         @media (max-width: 720px) {
           .cit-shared-detail-overlay {
             align-items: flex-end;
@@ -977,18 +1150,22 @@ export default function FilmDetailsModal({
 
           .cit-shared-detail-modal {
             width: 100%;
-            max-height: 92vh;
+            max-height: 94dvh;
             border-radius: 18px 18px 0 0;
             border-bottom: 0;
           }
 
           .cit-shared-detail-hero {
-            min-height: 145px;
+            min-height: 132px;
             border-radius: 18px 18px 0 0;
           }
 
           .cit-shared-detail-heading {
-            padding: 46px 54px 24px 18px;
+            padding: 42px 54px 20px 18px;
+          }
+
+          .cit-shared-detail-heading h2 {
+            font-size: clamp(25px, 8vw, 32px);
           }
 
           .cit-shared-detail-content {
@@ -1002,9 +1179,126 @@ export default function FilmDetailsModal({
             line-height: 1.55;
           }
 
+          .cit-shared-detail-provider-group {
+            display: block;
+          }
+
+          .cit-shared-detail-provider-label {
+            margin-bottom: 7px;
+          }
+
+          .cit-shared-detail-copy {
+            display: contents;
+          }
+
+          .cit-shared-detail-content {
+            grid-template-columns: 78px minmax(0, 1fr);
+            gap: 10px 12px;
+            padding: 14px;
+          }
+
+          .cit-shared-detail-content > div:first-child {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+          }
+
+          .cit-shared-detail-poster {
+            border-radius: 9px;
+          }
+
+          .cit-shared-detail-metadata,
+          .cit-shared-skeleton {
+            grid-column: 2;
+            margin-bottom: 0;
+          }
+
+          .cit-shared-detail-metadata {
+            gap: 5px 10px;
+          }
+
+          .cit-shared-detail-metadata span + span::before {
+            content: none;
+            margin-right: 0;
+          }
+
+          .cit-shared-detail-metadata span:last-child {
+            flex-basis: 100%;
+          }
+
+          .cit-shared-detail-tagline {
+            grid-column: 2;
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+
+          .cit-shared-detail-overview,
+          .cit-shared-detail-credits,
+          .cit-shared-detail-imdb,
+          .cit-shared-detail-loading,
           .cit-shared-detail-actions,
           .cit-shared-detail-watch {
             grid-column: 1 / -1;
+          }
+
+          .cit-shared-detail-overview {
+            margin-top: 2px;
+          }
+
+          .cit-shared-detail-credits {
+            margin-top: 4px;
+            padding: 10px 11px;
+          }
+
+          .cit-shared-detail-imdb {
+            margin-top: 0;
+          }
+
+          .cit-shared-detail-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 4px;
+          }
+
+          .cit-shared-detail-actions > .cit-shared-detail-primary {
+            grid-column: 1 / -1;
+          }
+
+          .cit-shared-detail-actions > .cit-shared-detail-secondary,
+          .cit-shared-detail-actions > div,
+          .cit-shared-detail-watched {
+            width: 100%;
+            box-sizing: border-box;
+          }
+
+          .cit-shared-detail-primary,
+          .cit-shared-detail-secondary,
+          .cit-shared-detail-watched {
+            min-height: 40px;
+            padding: 9px 8px;
+          }
+
+          .cit-shared-detail-watch {
+            margin-top: 4px;
+            padding-top: 14px;
+          }
+
+          .cit-shared-detail-watch h3 {
+            margin-bottom: 8px;
+            font-size: 14px;
+          }
+
+          .cit-shared-detail-provider-group {
+            display: grid;
+            grid-template-columns: 70px minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+            padding: 8px 9px;
+          }
+
+          .cit-shared-detail-provider-label {
+            margin-bottom: 0;
           }
         }
       `}</style>
@@ -1060,8 +1354,13 @@ export default function FilmDetailsModal({
 
           <div className="cit-shared-detail-copy">
             {detailLoading && (
-              <div className="cit-shared-detail-loading">
-                Loading film details…
+              <div
+                className="cit-shared-skeleton"
+                aria-label="Loading film details"
+              >
+                <div className="cit-shared-skeleton-line" />
+                <div className="cit-shared-skeleton-line" />
+                <div className="cit-shared-skeleton-line" />
               </div>
             )}
 
@@ -1242,6 +1541,43 @@ export default function FilmDetailsModal({
                     </div>
                   )}
                 </>
+              )}
+
+              {(commercialAvailability.rent.length > 0 ||
+                commercialAvailability.buy.length > 0) && (
+                <>
+                  <div className="cit-shared-commercial-heading">
+                    Rent or buy
+                  </div>
+
+                  {commercialAvailability.rent.length > 0 && (
+                    <div className="cit-shared-detail-provider-group">
+                      <div className="cit-shared-detail-provider-label">
+                        Rent
+                      </div>
+                      <ProviderBadges
+                        providers={commercialAvailability.rent}
+                      />
+                    </div>
+                  )}
+
+                  {commercialAvailability.buy.length > 0 && (
+                    <div className="cit-shared-detail-provider-group">
+                      <div className="cit-shared-detail-provider-label">
+                        Buy
+                      </div>
+                      <ProviderBadges
+                        providers={commercialAvailability.buy}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {loadingCommercialAvailability && (
+                <div className="cit-shared-detail-loading">
+                  Checking rent and buy options…
+                </div>
               )}
 
               {availability.watchUrl && (
