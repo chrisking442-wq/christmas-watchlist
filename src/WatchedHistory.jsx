@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import FilmDetailsModal from "./FilmDetailsModal";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 
@@ -24,6 +25,7 @@ export default function WatchedHistory({
   const [films, setFilms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedFilm, setSelectedFilm] = useState(null);
 
   useEffect(() => {
     if (!supabase || !session?.user) {
@@ -51,7 +53,8 @@ export default function WatchedHistory({
             title,
             release_year,
             overview,
-            poster_path
+            poster_path,
+            backdrop_path
           )
         `)
         .eq("user_id", session.user.id)
@@ -155,6 +158,7 @@ export default function WatchedHistory({
 
         .cit-watched-card {
           overflow: hidden;
+          cursor: pointer;
           border: 1px solid #e2ddd4;
           border-radius: 14px;
           background: rgba(255,255,255,.9);
@@ -348,7 +352,23 @@ export default function WatchedHistory({
       {!loading && !error && films.length > 0 && (
         <div className="cit-watched-grid">
           {films.map(({ film, latestWatchedAt, watchCount }) => (
-            <article key={film.id} className="cit-watched-card">
+            <article
+              key={film.id}
+              className="cit-watched-card"
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                if (event.target.closest("button, a")) return;
+                setSelectedFilm(film);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedFilm(film);
+                }
+              }}
+              aria-label={`View details for ${film.title}`}
+            >
               <div className="cit-watched-poster-wrap">
                 {film.poster_path ? (
                   <img
@@ -388,6 +408,15 @@ export default function WatchedHistory({
             </article>
           ))}
         </div>
+      )}
+
+      {selectedFilm && (
+        <FilmDetailsModal
+          film={selectedFilm}
+          supabase={supabase}
+          session={session}
+          onClose={() => setSelectedFilm(null)}
+        />
       )}
     </div>
   );

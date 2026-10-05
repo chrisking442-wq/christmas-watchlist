@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import FilmDetailsModal from "./FilmDetailsModal";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 
@@ -109,6 +110,7 @@ export default function MyLibrary({
   const [savingWatchedFilmIds, setSavingWatchedFilmIds] = useState(new Set());
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState("");
+  const [selectedFilm, setSelectedFilm] = useState(null);
 
   const pageTitle =
     listType === "favourites" ? "Favourites" : "My Christmas List";
@@ -738,6 +740,7 @@ export default function MyLibrary({
 
         .cit-library-card {
           min-width: 0;
+          cursor: pointer;
           overflow: hidden;
           border: 1px solid #e2ddd4;
           border-radius: 14px;
@@ -1127,7 +1130,23 @@ export default function MyLibrary({
             const savingWatched = savingWatchedFilmIds.has(filmKey);
 
             return (
-              <article key={item.id} className="cit-library-card">
+              <article
+                key={item.id}
+                className="cit-library-card"
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  if (event.target.closest("button, a")) return;
+                  setSelectedFilm(film);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedFilm(film);
+                  }
+                }}
+                aria-label={`View details for ${film?.title || "film"}`}
+              >
                 <div className="cit-library-poster-wrap">
                   {watchedAt && (
                     <span
@@ -1248,6 +1267,22 @@ export default function MyLibrary({
             );
           })}
         </div>
+      )}
+
+      {selectedFilm && (
+        <FilmDetailsModal
+          film={selectedFilm}
+          supabase={supabase}
+          session={session}
+          onClose={() => setSelectedFilm(null)}
+          onWatched={(watchedAt) => {
+            const key = String(selectedFilm.id);
+            setWatchedByFilmId((prev) => ({
+              ...prev,
+              [key]: watchedAt,
+            }));
+          }}
+        />
       )}
     </div>
   );

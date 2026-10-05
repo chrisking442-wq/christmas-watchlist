@@ -129,6 +129,9 @@ export default function Catalogue({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedFilm, setSelectedFilm] = useState(null);
+  const [filmDetailsByTmdbId, setFilmDetailsByTmdbId] = useState({});
+  const [loadingFilmDetails, setLoadingFilmDetails] = useState(new Set());
+  const [filmDetailErrors, setFilmDetailErrors] = useState({});
   const [alertFilmIds, setAlertFilmIds] = useState(new Set());
   const [alertSavingFilmIds, setAlertSavingFilmIds] = useState(new Set());
   const [watchedByFilmId, setWatchedByFilmId] = useState({});
@@ -362,6 +365,119 @@ export default function Catalogue({
       cancelled = true;
     };
   }, [supabase, session]);
+
+  useEffect(() => {
+    if (!selectedFilm?.tmdb_id || !TMDB_KEY) return;
+
+    const tmdbId = selectedFilm.tmdb_id;
+
+    if (filmDetailsByTmdbId[tmdbId]) return;
+    if (loadingFilmDetails.has(tmdbId)) return;
+
+    let cancelled = false;
+
+    async function loadFilmDetails() {
+      setLoadingFilmDetails((prev) => {
+        const next = new Set(prev);
+        next.add(tmdbId);
+        return next;
+      });
+
+      setFilmDetailErrors((prev) => ({
+        ...prev,
+        [tmdbId]: "",
+      }));
+
+      try {
+        const url = new URL(
+          `https://api.themoviedb.org/3/movie/${tmdbId}`
+        );
+
+        url.searchParams.set("api_key", TMDB_KEY);
+        url.searchParams.set("language", "en-GB");
+        url.searchParams.set(
+          "append_to_response",
+          "credits,release_dates"
+        );
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(
+            `TMDB details request failed (${response.status})`
+          );
+        }
+
+        const data = await response.json();
+
+        const ukReleaseData = (data?.release_dates?.results || []).find(
+          (row) => row.iso_3166_1 === "GB"
+        );
+
+        const ukCertification =
+          (ukReleaseData?.release_dates || [])
+            .map((row) => (row.certification || "").trim())
+            .find(Boolean) || "";
+
+        const director =
+          (data?.credits?.crew || []).find(
+            (person) => person.job === "Director"
+          )?.name || "";
+
+        const cast = (data?.credits?.cast || [])
+          .slice(0, 5)
+          .map((person) => person.name)
+          .filter(Boolean);
+
+        const details = {
+          runtime: data?.runtime || null,
+          genres: (data?.genres || [])
+            .map((genre) => genre.name)
+            .filter(Boolean),
+          certification: ukCertification,
+          director,
+          cast,
+          imdbId: data?.imdb_id || null,
+          releaseDate: data?.release_date || null,
+          tagline: data?.tagline || "",
+        };
+
+        if (!cancelled) {
+          setFilmDetailsByTmdbId((prev) => ({
+            ...prev,
+            [tmdbId]: details,
+          }));
+        }
+      } catch (detailError) {
+        console.error(
+          "Couldn't load richer film details:",
+          detailError
+        );
+
+        if (!cancelled) {
+          setFilmDetailErrors((prev) => ({
+            ...prev,
+            [tmdbId]:
+              "Extra film details couldn't be loaded right now.",
+          }));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingFilmDetails((prev) => {
+            const next = new Set(prev);
+            next.delete(tmdbId);
+            return next;
+          });
+        }
+      }
+    }
+
+    loadFilmDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFilm]);
 
   useEffect(() => {
     if (!selectedFilm) return;
@@ -611,6 +727,32 @@ export default function Catalogue({
         return next;
       });
     }
+  }
+
+  function formatRuntime(minutes) {
+    if (!minutes) return "";
+
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+
+    if (!hours) return `${mins}m`;
+    if (!mins) return `${hours}h`;
+
+    return `${hours}h ${mins}m`;
+  }
+
+  function formatReleaseDate(value) {
+    if (!value) return "";
+
+    const date = new Date(`${value}T12:00:00`);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   }
 
   function formatWatchedDate(value) {
@@ -1280,6 +1422,63 @@ export default function Catalogue({
           color: #b0b5b2;
         }
 
+
+        .cit-detail-loading {
+          margin: 0 0 12px;
+          color: #89918d;
+          font-size: 11px;
+        }
+
+        .cit-detail-tagline {
+          margin: 0 0 10px;
+          color: #52635c;
+          font-size: 13px;
+          font-style: italic;
+        }
+
+        .cit-detail-credits {
+          display: grid;
+          gap: 7px;
+          margin-top: 14px;
+          padding: 12px 13px;
+          border: 1px solid #e5e0d8;
+          border-radius: 10px;
+          background: rgba(255,255,255,.58);
+        }
+
+        .cit-detail-credit-row {
+          display: grid;
+          grid-template-columns: 68px 1fr;
+          gap: 10px;
+          align-items: start;
+          color: #465850;
+          font-size: 11px;
+          line-height: 1.45;
+        }
+
+        .cit-detail-credit-label {
+          color: #8a918d;
+          font-weight: 750;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+          font-size: 9px;
+        }
+
+        .cit-detail-imdb {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          margin-top: 10px;
+          color: #244f40;
+          font-size: 11px;
+          font-weight: 750;
+          text-decoration: none;
+        }
+
+        .cit-detail-imdb:hover {
+          text-decoration: underline;
+        }
+
         .cit-detail-actions {
           display: flex;
           flex-wrap: wrap;
@@ -1519,6 +1718,11 @@ export default function Catalogue({
           .cit-detail-overview {
             font-size: 12px;
             line-height: 1.55;
+          }
+
+
+          .cit-detail-credit-row {
+            grid-template-columns: 58px 1fr;
           }
 
           .cit-detail-actions {
@@ -1901,6 +2105,17 @@ export default function Catalogue({
         const watchedKey = String(selectedFilm.id || "");
         const watchedAt = watchedByFilmId[watchedKey] || null;
         const savingWatched = savingWatchedFilmIds.has(watchedKey);
+        const richDetails =
+          filmDetailsByTmdbId[selectedFilm.tmdb_id] || null;
+        const richDetailsLoading =
+          loadingFilmDetails.has(selectedFilm.tmdb_id);
+        const richDetailsError =
+          filmDetailErrors[selectedFilm.tmdb_id] || "";
+        const runtimeText = formatRuntime(richDetails?.runtime);
+        const genreText = richDetails?.genres?.join(" / ") || "";
+        const releaseDateText = formatReleaseDate(
+          richDetails?.releaseDate
+        );
 
         return (
           <div
@@ -1963,10 +2178,75 @@ export default function Catalogue({
                 </div>
 
                 <div className="cit-detail-copy">
+                  {richDetailsLoading && (
+                    <div className="cit-detail-loading">
+                      Loading film details…
+                    </div>
+                  )}
+
+                  {richDetails && (
+                    <div className="cit-detail-metadata">
+                      {runtimeText && <span>{runtimeText}</span>}
+                      {richDetails.certification && (
+                        <span>{richDetails.certification}</span>
+                      )}
+                      {genreText && <span>{genreText}</span>}
+                      {releaseDateText && (
+                        <span>Released {releaseDateText}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {richDetails?.tagline && (
+                    <div className="cit-detail-tagline">
+                      “{richDetails.tagline}”
+                    </div>
+                  )}
+
                   <p className="cit-detail-overview">
                     {selectedFilm.overview ||
                       "No synopsis is available for this film yet."}
                   </p>
+
+                  {(richDetails?.director ||
+                    richDetails?.cast?.length > 0) && (
+                    <div className="cit-detail-credits">
+                      {richDetails.director && (
+                        <div className="cit-detail-credit-row">
+                          <span className="cit-detail-credit-label">
+                            Director
+                          </span>
+                          <span>{richDetails.director}</span>
+                        </div>
+                      )}
+
+                      {richDetails.cast?.length > 0 && (
+                        <div className="cit-detail-credit-row">
+                          <span className="cit-detail-credit-label">
+                            Cast
+                          </span>
+                          <span>{richDetails.cast.join(", ")}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {richDetails?.imdbId && (
+                    <a
+                      className="cit-detail-imdb"
+                      href={`https://www.imdb.com/title/${richDetails.imdbId}/`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      IMDb ↗
+                    </a>
+                  )}
+
+                  {richDetailsError && (
+                    <div className="cit-detail-loading">
+                      {richDetailsError}
+                    </div>
+                  )}
 
                   <div className="cit-detail-actions">
                     <button
