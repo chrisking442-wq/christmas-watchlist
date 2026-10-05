@@ -43,6 +43,29 @@ const FEATURED_FILMS = [
   { title: "Deck the Halls", year: 2006 },
 ];
 
+const CHRISTMAS_ROMANCE = [
+  { title: "Love Actually", year: 2003 },
+  { title: "The Holiday", year: 2006 },
+  { title: "Last Christmas", year: 2019 },
+  { title: "Love Hard", year: 2021 },
+  { title: "Falling for Christmas", year: 2022 },
+  { title: "This Is Christmas", year: 2022 },
+  { title: "The Family Stone", year: 2005 },
+  { title: "Happiest Season", year: 2020 },
+];
+
+const CHRISTMAS_CLASSICS = [
+  { title: "It's a Wonderful Life", year: 1946 },
+  { title: "Miracle on 34th Street", year: 1947 },
+  { title: "Miracle on 34th Street", year: 1994 },
+  { title: "A Christmas Story", year: 1983 },
+  { title: "National Lampoon's Christmas Vacation", year: 1989 },
+  { title: "Scrooged", year: 1988 },
+  { title: "The Muppet Christmas Carol", year: 1992 },
+  { title: "The Santa Clause", year: 1994 },
+  { title: "Home Alone", year: 1990 },
+];
+
 function normaliseTitle(value = "") {
   return value
     .toLowerCase()
@@ -1100,6 +1123,153 @@ export default function Catalogue({
       return (a.title || "").localeCompare(b.title || "");
     });
 
+  const showCuratedHome =
+    !search.trim() &&
+    !decade &&
+    !platform &&
+    sortMode === "featured";
+
+  function findCuratedFilms(items) {
+    const found = [];
+
+    for (const item of items) {
+      const wantedTitle = normaliseTitle(item.title);
+
+      const film = films.find((candidate) => {
+        const titleMatches =
+          normaliseTitle(candidate.title || "") === wantedTitle;
+
+        const yearMatches =
+          !item.year ||
+          Number(candidate.release_year) === Number(item.year);
+
+        return titleMatches && yearMatches;
+      });
+
+      if (film && !found.some((existing) => existing.id === film.id)) {
+        found.push(film);
+      }
+    }
+
+    return found;
+  }
+
+  const christmasFavourites = findCuratedFilms(
+    FEATURED_FILMS.slice(0, 12)
+  );
+  const christmasRomance = findCuratedFilms(CHRISTMAS_ROMANCE);
+  const christmasClassics = findCuratedFilms(CHRISTMAS_CLASSICS);
+
+  function renderShelfFilm(film) {
+    const providerData = watchProviders[film.tmdb_id];
+
+    const allProviders = uniqueProviders([
+      ...(providerData?.flatrate || []),
+      ...(providerData?.free || []),
+      ...(providerData?.ads || []),
+    ]);
+
+    const isFavourite = favouriteTmdbIds?.has(film.tmdb_id);
+    const watchedAt = watchedByFilmId[String(film.id)] || null;
+    const alreadyAdded = watchlistTmdbIds?.has(film.tmdb_id);
+
+    return (
+      <article
+        key={film.id}
+        className="cit-shelf-card"
+        role="button"
+        tabIndex={0}
+        onClick={(event) => {
+          if (event.target.closest("button, a")) return;
+          setSelectedFilm(film);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setSelectedFilm(film);
+          }
+        }}
+        aria-label={`View details for ${film.title}`}
+      >
+        <div className="cit-shelf-poster-wrap">
+          {film.poster_path ? (
+            <img
+              className="cit-shelf-poster"
+              src={`${TMDB_IMG}/w342${film.poster_path}`}
+              alt={film.title}
+              loading="lazy"
+            />
+          ) : (
+            <div className="cit-shelf-no-poster">No poster</div>
+          )}
+
+          {watchedAt && (
+            <span
+              className="cit-shelf-watched"
+              title={`Watched ${formatWatchedDate(watchedAt)}`}
+            >
+              ✓
+            </span>
+          )}
+
+          <button
+            type="button"
+            className="cit-shelf-heart"
+            onClick={() => {
+              if (!isFavourite) addToFavourites(film);
+            }}
+            disabled={isFavourite}
+            aria-label={
+              isFavourite
+                ? `${film.title} is in favourites`
+                : `Add ${film.title} to favourites`
+            }
+          >
+            {isFavourite ? "♥" : "♡"}
+          </button>
+        </div>
+
+        <div className="cit-shelf-body">
+          <div className="cit-shelf-film-title">{film.title}</div>
+
+          <div className="cit-shelf-film-meta">
+            <span>{film.release_year || "Year unknown"}</span>
+            {alreadyAdded && <span> · ✓ My List</span>}
+          </div>
+
+          {allProviders.length > 0 && (
+            <div className="cit-shelf-provider">
+              <ProviderBadges
+                providers={allProviders}
+                max={1}
+                compact
+              />
+            </div>
+          )}
+        </div>
+      </article>
+    );
+  }
+
+  function CuratedShelf({ title, subtitle, films: shelfFilms }) {
+    if (!shelfFilms.length) return null;
+
+    return (
+      <section className="cit-shelf">
+        <div className="cit-shelf-heading">
+          <div>
+            <h2>{title}</h2>
+            {subtitle && <p>{subtitle}</p>}
+          </div>
+        </div>
+
+        <div className="cit-shelf-track">
+          {shelfFilms.map(renderShelfFilm)}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div className="cit-catalogue">
       <style>{`
@@ -1219,6 +1389,193 @@ export default function Catalogue({
           cursor: pointer;
           font-size: 12px;
           font-weight: 700;
+        }
+
+        .cit-curated-home {
+          margin: 6px 0 28px;
+        }
+
+        .cit-shelf + .cit-shelf {
+          margin-top: 24px;
+        }
+
+        .cit-shelf-heading {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 10px;
+        }
+
+        .cit-shelf-heading h2 {
+          margin: 0;
+          color: #153a2f;
+          font-size: 18px;
+          line-height: 1.15;
+          letter-spacing: -.025em;
+        }
+
+        .cit-shelf-heading p {
+          margin: 4px 0 0;
+          color: #7a847f;
+          font-size: 11px;
+          line-height: 1.4;
+        }
+
+        .cit-shelf-track {
+          display: grid;
+          grid-auto-flow: column;
+          grid-auto-columns: minmax(142px, 168px);
+          gap: 12px;
+          overflow-x: auto;
+          overscroll-behavior-inline: contain;
+          scroll-snap-type: x proximity;
+          padding: 2px 2px 8px;
+          scrollbar-width: thin;
+          scrollbar-color: #cfc9bf transparent;
+        }
+
+        .cit-shelf-card {
+          min-width: 0;
+          overflow: hidden;
+          scroll-snap-align: start;
+          border: 1px solid #e2ddd4;
+          border-radius: 12px;
+          background: rgba(255,255,255,.88);
+          cursor: pointer;
+          box-shadow: 0 2px 9px rgba(32,43,37,.045);
+          transition:
+            transform .16s ease,
+            box-shadow .16s ease,
+            border-color .16s ease;
+        }
+
+        .cit-shelf-card:hover {
+          transform: translateY(-3px);
+          border-color: #d2ccc1;
+          box-shadow: 0 10px 22px rgba(32,43,37,.09);
+        }
+
+        .cit-shelf-card:focus-visible {
+          outline: 3px solid rgba(18,59,45,.15);
+          outline-offset: 3px;
+        }
+
+        .cit-shelf-poster-wrap {
+          position: relative;
+          aspect-ratio: 2 / 3;
+          overflow: hidden;
+          background: #ebe7df;
+        }
+
+        .cit-shelf-poster {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+          transition: transform .22s ease;
+        }
+
+        .cit-shelf-card:hover .cit-shelf-poster {
+          transform: scale(1.025);
+        }
+
+        .cit-shelf-no-poster {
+          width: 100%;
+          height: 100%;
+          display: grid;
+          place-items: center;
+          color: #7b837f;
+          font-size: 10px;
+        }
+
+        .cit-shelf-heart {
+          position: absolute;
+          top: 7px;
+          right: 7px;
+          width: 29px;
+          height: 29px;
+          border: 1px solid rgba(255,255,255,.8);
+          border-radius: 999px;
+          background: rgba(255,255,255,.92);
+          color: #8f2730;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          font-size: 15px;
+          box-shadow: 0 2px 8px rgba(0,0,0,.12);
+          backdrop-filter: blur(8px);
+        }
+
+        .cit-shelf-heart[disabled] {
+          background: rgba(255,244,245,.94);
+          cursor: default;
+        }
+
+        .cit-shelf-watched {
+          position: absolute;
+          left: 7px;
+          bottom: 7px;
+          width: 24px;
+          height: 24px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(255,255,255,.78);
+          border-radius: 999px;
+          background: rgba(18,59,45,.92);
+          color: #fff;
+          font-size: 10px;
+          font-weight: 800;
+          box-shadow: 0 2px 8px rgba(0,0,0,.12);
+        }
+
+        .cit-shelf-body {
+          padding: 8px 8px 9px;
+        }
+
+        .cit-shelf-film-title {
+          min-height: 32px;
+          color: #18382f;
+          font-size: 12px;
+          font-weight: 780;
+          line-height: 1.3;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          overflow: hidden;
+        }
+
+        .cit-shelf-film-meta {
+          margin-top: 3px;
+          color: #818985;
+          font-size: 9px;
+        }
+
+        .cit-shelf-provider {
+          min-height: 24px;
+          margin-top: 6px;
+        }
+
+        .cit-all-films-heading {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 12px;
+          margin: 26px 0 12px;
+          padding-top: 18px;
+          border-top: 1px solid #e4ded4;
+        }
+
+        .cit-all-films-heading h2 {
+          margin: 0;
+          color: #153a2f;
+          font-size: 20px;
+          letter-spacing: -.025em;
+        }
+
+        .cit-all-films-heading span {
+          color: #818985;
+          font-size: 11px;
         }
 
         .cit-film-grid {
@@ -1945,6 +2302,28 @@ export default function Catalogue({
         }
 
         @media (max-width: 720px) {
+          .cit-shelf + .cit-shelf {
+            margin-top: 20px;
+          }
+
+          .cit-shelf-heading h2 {
+            font-size: 17px;
+          }
+
+          .cit-shelf-track {
+            grid-auto-columns: minmax(132px, 42vw);
+            gap: 10px;
+            margin-right: -12px;
+            padding-right: 12px;
+          }
+
+          .cit-all-films-heading {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 22px;
+          }
+
           .cit-catalogue-toolbar {
             grid-template-columns: 1fr;
           }
@@ -2258,6 +2637,33 @@ export default function Catalogue({
           </button>
         )}
       </div>
+
+      {showCuratedHome && !loading && !error && (
+        <div className="cit-curated-home">
+          <CuratedShelf
+            title="Christmas favourites"
+            subtitle="The films we'd expect to find on almost every Christmas watchlist."
+            films={christmasFavourites}
+          />
+
+          <CuratedShelf
+            title="Christmas romance"
+            subtitle="Rom-coms and festive love stories."
+            films={christmasRomance}
+          />
+
+          <CuratedShelf
+            title="Christmas classics"
+            subtitle="Older favourites worth coming back to every December."
+            films={christmasClassics}
+          />
+
+          <div className="cit-all-films-heading">
+            <h2>All Christmas films</h2>
+            <span>{films.length} films in the catalogue</span>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="cit-status-message">
