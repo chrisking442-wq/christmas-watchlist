@@ -10,13 +10,63 @@ const PLATFORM_FILTERS = [
   "Netflix",
   "Disney+",
   "Prime Video",
+  "Apple TV",
   "ITVX",
   "BBC iPlayer",
   "NOW",
   "Channel 4",
 ];
 
+const FEATURED_FILMS = [
+  { title: "Home Alone", year: 1990 },
+  { title: "Elf", year: 2003 },
+  { title: "Love Actually", year: 2003 },
+  { title: "The Holiday", year: 2006 },
+  { title: "The Muppet Christmas Carol", year: 1992 },
+  { title: "The Santa Clause", year: 1994 },
+  { title: "The Polar Express", year: 2004 },
+  { title: "Klaus", year: 2019 },
+  { title: "Home Alone 2: Lost in New York", year: 1992 },
+  { title: "Last Christmas", year: 2019 },
+  { title: "Nativity!", year: 2009 },
+  { title: "National Lampoon's Christmas Vacation", year: 1989 },
+  { title: "It's a Wonderful Life", year: 1946 },
+  { title: "Miracle on 34th Street", year: 1994 },
+  { title: "Miracle on 34th Street", year: 1947 },
+  { title: "Scrooged", year: 1988 },
+  { title: "Arthur Christmas", year: 2011 },
+  { title: "How the Grinch Stole Christmas", year: 2000 },
+  { title: "The Grinch", year: 2018 },
+  { title: "Jingle All the Way", year: 1996 },
+  { title: "A Christmas Story", year: 1983 },
+  { title: "The Christmas Chronicles", year: 2018 },
+  { title: "Deck the Halls", year: 2006 },
+];
+
+function normaliseTitle(value = "") {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function featuredRank(film) {
+  const title = normaliseTitle(film?.title || "");
+  const year = Number(film?.release_year) || 0;
+
+  const index = FEATURED_FILMS.findIndex((item) => {
+    const titleMatches = normaliseTitle(item.title) === title;
+    const yearMatches = !item.year || Number(item.year) === year;
+
+    return titleMatches && yearMatches;
+  });
+
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
 function normaliseProviderName(name = "") {
+  const trimmed = String(name || "").trim();
+
   const direct = {
     "Amazon Prime Video": "Prime Video",
     "Amazon Prime Video with Ads": "Prime Video",
@@ -25,18 +75,31 @@ function normaliseProviderName(name = "") {
     "Netflix Kids": "Netflix",
     "Disney Plus": "Disney+",
     "Paramount Plus": "Paramount+",
-    "Apple TV Plus": "Apple TV+",
+    "Apple TV": "Apple TV",
+    "Apple TV+": "Apple TV",
+    "Apple TV Plus": "Apple TV",
     "Sky Go": "Sky Go",
     "Apple TV Amazon Channel": "Apple TV (Prime Video Channel)",
+    "Now TV": "NOW",
+    "NOW TV": "NOW",
+    "Now TV Cinema": "NOW",
+    "NOW TV Cinema": "NOW",
+    "NOW Cinema": "NOW",
+    "Now TV Entertainment": "NOW",
+    "NOW TV Entertainment": "NOW",
   };
 
-  if (direct[name]) return direct[name];
+  if (direct[trimmed]) return direct[trimmed];
 
-  if (name.endsWith(" Amazon Channel")) {
-    return `${name.replace(/ Amazon Channel$/, "")} (Prime Video Channel)`;
+  if (/^now(?:\s+tv)?(?:\s+cinema|\s+entertainment)?$/i.test(trimmed)) {
+    return "NOW";
   }
 
-  return name;
+  if (trimmed.endsWith(" Amazon Channel")) {
+    return `${trimmed.replace(/ Amazon Channel$/, "")} (Prime Video Channel)`;
+  }
+
+  return trimmed;
 }
 
 function uniqueProviders(providers = []) {
@@ -126,6 +189,7 @@ export default function Catalogue({
   const [search, setSearch] = useState("");
   const [decade, setDecade] = useState("");
   const [platform, setPlatform] = useState("");
+  const [sortMode, setSortMode] = useState("featured");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedFilm, setSelectedFilm] = useState(null);
@@ -974,28 +1038,67 @@ export default function Catalogue({
   function filmMatchesPlatform(film, selectedPlatform) {
     if (!selectedPlatform) return true;
 
-    return getAllProviders(film).some(
-      (provider) =>
-        normaliseProviderName(provider.provider_name) === selectedPlatform
-    );
+    return getAllProviders(film).some((provider) => {
+      const providerName = normaliseProviderName(
+        provider.provider_name
+      );
+
+      if (selectedPlatform === "Apple TV") {
+        return (
+          providerName === "Apple TV" ||
+          providerName.startsWith("Apple TV (")
+        );
+      }
+
+      return providerName === selectedPlatform;
+    });
   }
 
-  const filteredFilms = films.filter((film) => {
-    const q = search.trim().toLowerCase();
+  const filteredFilms = films
+    .filter((film) => {
+      const q = search.trim().toLowerCase();
 
-    const matchesSearch =
-      !q || (film.title || "").toLowerCase().includes(q);
+      const matchesSearch =
+        !q || (film.title || "").toLowerCase().includes(q);
 
-    const year = Number(film.release_year) || 0;
+      const year = Number(film.release_year) || 0;
 
-    const matchesDecade =
-      !decade ||
-      (year >= Number(decade) && year < Number(decade) + 10);
+      const matchesDecade =
+        !decade ||
+        (year >= Number(decade) && year < Number(decade) + 10);
 
-    const matchesPlatform = filmMatchesPlatform(film, platform);
+      const matchesPlatform = filmMatchesPlatform(film, platform);
 
-    return matchesSearch && matchesDecade && matchesPlatform;
-  });
+      return matchesSearch && matchesDecade && matchesPlatform;
+    })
+    .sort((a, b) => {
+      if (sortMode === "newest") {
+        return (
+          (Number(b.release_year) || 0) -
+            (Number(a.release_year) || 0) ||
+          (a.title || "").localeCompare(b.title || "")
+        );
+      }
+
+      if (sortMode === "oldest") {
+        return (
+          (Number(a.release_year) || 9999) -
+            (Number(b.release_year) || 9999) ||
+          (a.title || "").localeCompare(b.title || "")
+        );
+      }
+
+      if (sortMode === "az") {
+        return (a.title || "").localeCompare(b.title || "");
+      }
+
+      const aRank = featuredRank(a);
+      const bRank = featuredRank(b);
+
+      if (aRank !== bRank) return aRank - bRank;
+
+      return (a.title || "").localeCompare(b.title || "");
+    });
 
   return (
     <div className="cit-catalogue">
@@ -1006,7 +1109,7 @@ export default function Catalogue({
 
         .cit-catalogue-toolbar {
           display: grid;
-          grid-template-columns: minmax(220px, 1fr) auto;
+          grid-template-columns: minmax(220px, 1fr) auto auto;
           gap: 10px;
           align-items: center;
           margin-bottom: 12px;
@@ -1034,13 +1137,18 @@ export default function Catalogue({
           box-shadow: 0 0 0 3px rgba(18, 59, 45, 0.08);
         }
 
-        .cit-decade-select {
+        .cit-decade-select,
+        .cit-sort-select {
           border: 1px solid #d8d3ca;
           background: #fff;
           color: #28483e;
           padding: 11px 12px;
           border-radius: 10px;
           cursor: pointer;
+        }
+
+        .cit-sort-select {
+          min-width: 132px;
         }
 
         .cit-platform-filters {
@@ -1841,7 +1949,8 @@ export default function Catalogue({
             grid-template-columns: 1fr;
           }
 
-          .cit-decade-select {
+          .cit-decade-select,
+          .cit-sort-select {
             width: 100%;
           }
 
@@ -2091,6 +2200,18 @@ export default function Catalogue({
           <option value="1930">1930s</option>
           <option value="1920">1920s</option>
         </select>
+
+        <select
+          className="cit-sort-select"
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value)}
+          aria-label="Sort Christmas films"
+        >
+          <option value="featured">Featured first</option>
+          <option value="az">A–Z</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
       </div>
 
       <div className="cit-platform-filters">
@@ -2118,7 +2239,9 @@ export default function Catalogue({
             ? "Loading catalogue…"
             : error
             ? "Couldn't load catalogue"
-            : `${filteredFilms.length} of ${films.length} films`}
+            : `${filteredFilms.length} of ${films.length} films${
+                sortMode === "featured" ? " · Christmas favourites first" : ""
+              }`}
         </span>
 
         {(search || decade || platform) && (
