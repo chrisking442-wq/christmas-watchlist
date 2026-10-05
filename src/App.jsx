@@ -426,6 +426,10 @@ function ImdbLinkCell({ title, year, isTVSheet, fallbackUrl }) {
 /* ========= MAIN APP ========= */
 export default function App() {
     const [session, setSession] = useState(null);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [activeView, setActiveView] = useState("discover");
+    const [accountOpen, setAccountOpen] = useState(false);
+    const [showAdminTools, setShowAdminTools] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -442,6 +446,40 @@ export default function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !session?.user) {
+      setIsAdmin(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function checkAdmin() {
+      const { data, error } = await supabase
+        .from("v2_profiles")
+        .select("is_admin")
+        .eq("id", session.user.id)
+        .single();
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Couldn't check admin status:", error);
+        setIsAdmin(false);
+        return;
+      }
+
+      setIsAdmin(!!data?.is_admin);
+    }
+
+    checkAdmin();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
 useEffect(() => {
   if (!supabase || !session?.user) {
     setWatchlistTmdbIds(new Set());
@@ -968,177 +1006,693 @@ const saveFavouriteFilm = async (film) => {
 };
 
 
+  const accountName =
+    session?.user?.user_metadata?.display_name ||
+    session?.user?.email?.split("@")[0] ||
+    "Account";
+
+  const accountInitial =
+    accountName?.trim()?.charAt(0)?.toUpperCase() || "A";
+
+  async function signOutUser() {
+    if (!supabase) return;
+
+    await supabase.auth.signOut();
+    setAccountOpen(false);
+    setShowAdminTools(false);
+    setActiveView("discover");
+  }
+
   /* ====== UI ====== */
   return (
-    <div style={{ padding:16, maxWidth:1200, margin:"0 auto" }}>
-      {/* Simple header with cloud controls always visible */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:8 }}>
-        <div style={{ lineHeight: 1, display: "inline-block" }}>
-  <div
-    style={{
-      fontSize: "clamp(28px, 7vw, 46px)",
-      fontWeight: 800,
-      letterSpacing: "-1.5px",
-      color: "#123b2d",
-      position: "relative",
-      display: "inline-block",
-    }}
-  >
-    <span
+    <div
+      className="cit-app"
       style={{
-        position: "relative",
-        display: "inline-block",
+        padding: "16px 16px 88px",
+        maxWidth: 1240,
+        margin: "0 auto",
       }}
     >
-      C
+      <style>{`
+        :root {
+          color-scheme: light;
+        }
 
-      {/* Small Santa hat */}
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          width: 18,
-          height: 12,
-          background: "#a61b1b",
-          top: -7,
-          left: -1,
-          transform: "rotate(-18deg) skewX(-12deg)",
-          borderRadius: "10px 10px 2px 2px",
-        }}
-      />
+        html {
+          scroll-behavior: smooth;
+        }
 
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          width: 19,
-          height: 4,
-          background: "#f6f0e6",
-          top: 2,
-          left: -2,
-          transform: "rotate(-8deg)",
-          borderRadius: 10,
-        }}
-      />
+        body {
+          margin: 0;
+          background: #f7f4ee;
+          color: #18382f;
+          font-family:
+            Inter,
+            ui-sans-serif,
+            system-ui,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+        }
 
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          width: 6,
-          height: 6,
-          background: "#f6f0e6",
-          borderRadius: "50%",
-          top: -6,
-          left: -5,
-        }}
-      />
-    </span>
+        button,
+        input,
+        select {
+          font: inherit;
+        }
 
-    heck It Twice
-  </div>
+        .cit-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 24px;
+          padding: 10px 0 16px;
+          margin-bottom: 12px;
+          border-bottom: 1px solid #e4ded4;
+        }
 
-  <div
-    style={{
-      marginTop: 7,
-      fontSize: "clamp(10px, 2.4vw, 13px)",
-      fontWeight: 600,
-      letterSpacing: "0.2em",
-      textTransform: "uppercase",
-      color: "#9b1c1c",
-    }}
-  >
-    The Ultimate Christmas Watchlist
-  </div>
+        .cit-logo-button {
+          border: 0;
+          padding: 0;
+          background: transparent;
+          text-align: left;
+          cursor: pointer;
+          color: inherit;
+        }
 
-  <div
-    style={{
-      marginTop: 7,
-      height: 2,
-      width: "72%",
-      marginLeft: "14%",
-      background: "#a61b1b",
-      borderRadius: 10,
-      opacity: 0.8,
-      transform: "rotate(-1deg)",
-    }}
-  />
-</div>
-                <div style={{display:"none"}}>
-          <input placeholder="Share/Load code" value={cloudCode} onChange={(e)=>setCloudCode(e.target.value.toUpperCase())}
-                 style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8}} />
-          <button onClick={() => loadFromCloud()} style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:"pointer"}}>☁️ Load</button>
-          <button onClick={saveToCloud} disabled={!Object.keys(sheets).length}
-                  style={{border:"1px solid #e5e7eb", padding:"6px 10px", borderRadius:8, cursor:Object.keys(sheets).length?"pointer":"not-allowed"}}>☁️ Save</button>
+        .cit-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-left: auto;
+        }
+
+        .cit-desktop-nav {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px;
+          border: 1px solid #e4ded4;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.78);
+        }
+
+        .cit-nav-button {
+          border: 0;
+          background: transparent;
+          color: #334e45;
+          border-radius: 999px;
+          padding: 9px 14px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 650;
+        }
+
+        .cit-nav-button:hover {
+          background: #f1eee8;
+          color: #123b2d;
+        }
+
+        .cit-nav-button--primary {
+          background: #123b2d;
+          color: white;
+        }
+
+        .cit-nav-button--primary:hover {
+          background: #0d3024;
+          color: white;
+        }
+
+        .cit-auth {
+          display: flex;
+          justify-content: flex-end;
+          margin: 0 0 18px;
+        }
+
+        .cit-account-wrap {
+          position: relative;
+        }
+
+        .cit-account-button {
+          width: 38px;
+          height: 38px;
+          border: 1px solid #d8d3ca;
+          border-radius: 999px;
+          background: #fff;
+          color: #123b2d;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 800;
+          box-shadow: 0 1px 3px rgba(28, 42, 35, 0.06);
+        }
+
+        .cit-account-button:hover {
+          border-color: #aebbb5;
+          background: #fbfaf7;
+        }
+
+        .cit-account-menu {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          z-index: 1500;
+          width: 210px;
+          padding: 7px;
+          border: 1px solid #ddd8cf;
+          border-radius: 12px;
+          background: #fff;
+          box-shadow: 0 12px 30px rgba(29, 42, 35, 0.14);
+        }
+
+        .cit-account-name {
+          padding: 8px 9px 10px;
+          border-bottom: 1px solid #eee9e1;
+          margin-bottom: 5px;
+        }
+
+        .cit-account-name strong {
+          display: block;
+          color: #18382f;
+          font-size: 13px;
+        }
+
+        .cit-account-name span {
+          display: block;
+          margin-top: 2px;
+          color: #818985;
+          font-size: 10px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .cit-account-menu button {
+          width: 100%;
+          border: 0;
+          background: transparent;
+          color: #40574f;
+          text-align: left;
+          padding: 8px 9px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 650;
+        }
+
+        .cit-account-menu button:hover {
+          background: #f5f2ec;
+          color: #123b2d;
+        }
+
+        .cit-account-menu .cit-signout {
+          color: #8d3535;
+        }
+
+        .cit-admin-panel {
+          margin: 0 0 20px;
+          padding: 10px;
+          border: 1px solid #ded8cf;
+          border-radius: 12px;
+          background: rgba(255,255,255,.65);
+        }
+
+        .cit-section-anchor {
+          scroll-margin-top: 20px;
+        }
+
+        .cit-discover-heading {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 16px;
+          margin: 26px 0 12px;
+        }
+
+        .cit-discover-heading h1 {
+          margin: 0;
+          color: #123b2d;
+          font-size: clamp(25px, 3.8vw, 36px);
+          line-height: 1.05;
+          letter-spacing: -0.035em;
+        }
+
+        .cit-discover-heading p {
+          margin: 7px 0 0;
+          color: #647069;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        .cit-search-all {
+          flex: 0 0 auto;
+          border: 1px solid #123b2d;
+          background: #123b2d;
+          color: #fff;
+          padding: 10px 15px;
+          border-radius: 10px;
+          cursor: pointer;
+          font-weight: 700;
+          box-shadow: 0 3px 10px rgba(18, 59, 45, 0.12);
+        }
+
+        .cit-search-all:hover {
+          background: #0d3024;
+        }
+
+        .cit-admin {
+          margin: 24px 0 18px;
+          border: 1px solid #e1ddd5;
+          border-radius: 12px;
+          background: rgba(255,255,255,.58);
+          overflow: hidden;
+        }
+
+        .cit-admin summary {
+          cursor: pointer;
+          list-style: none;
+          padding: 10px 13px;
+          color: #68746e;
+          font-size: 12px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: .08em;
+        }
+
+        .cit-admin summary::-webkit-details-marker {
+          display: none;
+        }
+
+        .cit-admin-content {
+          padding: 0 10px 10px;
+        }
+
+        .cit-mobile-nav {
+          display: none;
+        }
+
+        @media (max-width: 720px) {
+          .cit-app {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+          }
+
+          .cit-header {
+            align-items: flex-start;
+            padding-top: 6px;
+            margin-bottom: 8px;
+          }
+
+          .cit-desktop-nav {
+            display: none;
+          }
+
+          .cit-auth {
+            justify-content: flex-start;
+            margin-bottom: 14px;
+          }
+
+          .cit-header-actions {
+            gap: 6px;
+          }
+
+          .cit-account-button {
+            width: 36px;
+            height: 36px;
+          }
+
+          .cit-discover-heading {
+            align-items: stretch;
+            flex-direction: column;
+            margin-top: 20px;
+          }
+
+          .cit-search-all {
+            width: 100%;
+          }
+
+          .cit-mobile-nav {
+            position: fixed;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            z-index: 1200;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            padding: 5px;
+            border: 1px solid #ded8cf;
+            border-radius: 16px;
+            background: rgba(255, 253, 249, 0.96);
+            box-shadow: 0 10px 28px rgba(35, 48, 42, 0.16);
+            backdrop-filter: blur(14px);
+          }
+
+          .cit-mobile-nav button {
+            border: 0;
+            border-radius: 11px;
+            background: transparent;
+            color: #365047;
+            padding: 9px 5px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 700;
+          }
+
+          .cit-mobile-nav-button--active {
+            background: #123b2d !important;
+            color: #fff !important;
+          }
+        }
+      `}</style>
+
+      <header className="cit-header">
+        <button
+          type="button"
+          className="cit-logo-button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Check It Twice home"
+        >
+          <div style={{ lineHeight: 1, display: "inline-block" }}>
+            <div
+              style={{
+                fontSize: "clamp(29px, 5vw, 42px)",
+                fontWeight: 800,
+                letterSpacing: "-1.5px",
+                color: "#123b2d",
+                position: "relative",
+                display: "inline-block",
+              }}
+            >
+              <span
+                style={{
+                  position: "relative",
+                  display: "inline-block",
+                }}
+              >
+                C
+
+                {/* Original small Santa hat */}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    width: 18,
+                    height: 12,
+                    background: "#a61b1b",
+                    top: -7,
+                    left: -1,
+                    transform: "rotate(-18deg) skewX(-12deg)",
+                    borderRadius: "10px 10px 2px 2px",
+                  }}
+                />
+
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    width: 19,
+                    height: 4,
+                    background: "#f6f0e6",
+                    top: 2,
+                    left: -2,
+                    transform: "rotate(-8deg)",
+                    borderRadius: 10,
+                  }}
+                />
+
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: "absolute",
+                    width: 6,
+                    height: 6,
+                    background: "#f6f0e6",
+                    borderRadius: "50%",
+                    top: -6,
+                    left: -5,
+                  }}
+                />
+              </span>
+              heck It Twice
+            </div>
+
+            <div
+              style={{
+                marginTop: 7,
+                fontSize: "clamp(9px, 1.9vw, 12px)",
+                fontWeight: 650,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "#9b1c1c",
+              }}
+            >
+              The Ultimate Christmas Watchlist
+            </div>
+
+            <div
+              style={{
+                marginTop: 6,
+                height: 2,
+                width: "72%",
+                marginLeft: "14%",
+                background: "#a61b1b",
+                borderRadius: 10,
+                opacity: 0.76,
+                transform: "rotate(-1deg)",
+              }}
+            />
+          </div>
+        </button>
+
+        <div className="cit-header-actions">
+          <nav className="cit-desktop-nav" aria-label="Primary navigation">
+            <button
+              type="button"
+              className={`cit-nav-button ${
+                activeView === "discover" ? "cit-nav-button--primary" : ""
+              }`}
+              onClick={() => {
+                setActiveView("discover");
+                setAccountOpen(false);
+              }}
+            >
+              Discover
+            </button>
+
+            <button
+              type="button"
+              className={`cit-nav-button ${
+                activeView === "watchlist" ? "cit-nav-button--primary" : ""
+              }`}
+              onClick={() => {
+                setActiveView("watchlist");
+                setAccountOpen(false);
+              }}
+            >
+              My Christmas List
+            </button>
+
+            <button
+              type="button"
+              className={`cit-nav-button ${
+                activeView === "favourites" ? "cit-nav-button--primary" : ""
+              }`}
+              onClick={() => {
+                setActiveView("favourites");
+                setAccountOpen(false);
+              }}
+            >
+              Favourites
+            </button>
+          </nav>
+
+          {session?.user && (
+            <div className="cit-account-wrap">
+              <button
+                type="button"
+                className="cit-account-button"
+                onClick={() => setAccountOpen((open) => !open)}
+                aria-label="Open account menu"
+                title={accountName}
+              >
+                {accountInitial}
+              </button>
+
+              {accountOpen && (
+                <div className="cit-account-menu">
+                  <div className="cit-account-name">
+                    <strong>{accountName}</strong>
+                    <span>{session.user.email}</span>
+                  </div>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAdminTools((open) => !open);
+                        setAccountOpen(false);
+                      }}
+                    >
+                      Admin tools
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="cit-signout"
+                    onClick={signOutUser}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
 
-      <div style={{ marginBottom: 18 }}>
-  <AuthPanel supabase={supabase} session={session} />
-</div>
+        {/* Legacy cloud controls retained but intentionally hidden */}
+        <div style={{ display: "none" }}>
+          <input
+            placeholder="Share/Load code"
+            value={cloudCode}
+            onChange={(e) => setCloudCode(e.target.value.toUpperCase())}
+          />
+          <button onClick={() => loadFromCloud()}>Load</button>
+          <button onClick={saveToCloud}>Save</button>
+        </div>
+      </header>
 
-<MyLibrary
-  supabase={supabase}
-  session={session}
-  onWatchlistRemoved={(tmdbId) => {
-    setWatchlistTmdbIds((prev) => {
-      const next = new Set(prev);
-      next.delete(tmdbId);
-      return next;
-    });
+      {!session?.user && (
+        <div className="cit-auth">
+          <AuthPanel supabase={supabase} session={session} />
+        </div>
+      )}
 
-    setDiscover((prev) => [...prev]);
-  }}
-  onFavouriteRemoved={(tmdbId) => {
-  setFavouriteTmdbIds((prev) => {
-    const next = new Set(prev);
-    next.delete(tmdbId);
-    return next;
-  });
+      {isAdmin && showAdminTools && (
+        <div className="cit-admin-panel">
+          <CatalogueAdmin
+            supabase={supabase}
+            session={session}
+            onCatalogueUpdated={() =>
+              setCatalogueRefreshKey((prev) => prev + 1)
+            }
+          />
+        </div>
+      )}
 
-  setDiscover((prev) => [...prev]);
-}}
-/>
-<div style={{ marginBottom: 12 }}>
-  <button
-    onClick={openDiscover}
-    style={{
-      border: "1px solid #c7d2fe",
-      background: "#eef2ff",
-      padding: "8px 12px",
-      borderRadius: 8,
-      cursor: "pointer",
-      fontWeight: 600,
-    }}
-  >
-    🔎 Search all films
-  </button>
-</div>
-<CatalogueAdmin
-  supabase={supabase}
-  session={session}
-  onCatalogueUpdated={() =>
-    setCatalogueRefreshKey((prev) => prev + 1)
-  }
-/>
+      {activeView === "discover" ? (
+        <section
+          className="cit-section-anchor"
+          aria-labelledby="discover-title"
+        >
+          <div className="cit-discover-heading">
+            <div>
+              <h1 id="discover-title">Discover</h1>
+              <p>
+                Browse the Christmas catalogue, filter by UK streaming service,
+                or search for any film you consider part of Christmas.
+              </p>
+            </div>
 
-<Catalogue
-  supabase={supabase}
-  refreshKey={catalogueRefreshKey}
-  session={session}
-  watchlistTmdbIds={watchlistTmdbIds}
-  favouriteTmdbIds={favouriteTmdbIds}
-  onWatchlistAdded={(tmdbId) => {
-    setWatchlistTmdbIds(
-      (prev) => new Set([...prev, tmdbId])
-    );
-  }}
-  onFavouriteAdded={(tmdbId) => {
-    setFavouriteTmdbIds(
-      (prev) => new Set([...prev, tmdbId])
-    );
-  }}
-/>
+            <button
+              type="button"
+              className="cit-search-all"
+              onClick={openDiscover}
+            >
+              Search all films
+            </button>
+          </div>
+
+          <Catalogue
+            supabase={supabase}
+            refreshKey={catalogueRefreshKey}
+            session={session}
+            watchlistTmdbIds={watchlistTmdbIds}
+            favouriteTmdbIds={favouriteTmdbIds}
+            onWatchlistAdded={(tmdbId) => {
+              setWatchlistTmdbIds(
+                (prev) => new Set([...prev, tmdbId])
+              );
+            }}
+            onFavouriteAdded={(tmdbId) => {
+              setFavouriteTmdbIds(
+                (prev) => new Set([...prev, tmdbId])
+              );
+            }}
+          />
+        </section>
+      ) : (
+        <section className="cit-section-anchor">
+          <MyLibrary
+            supabase={supabase}
+            session={session}
+            listType={
+              activeView === "favourites"
+                ? "favourites"
+                : "watchlist"
+            }
+            onBrowseDiscover={() => setActiveView("discover")}
+            onWatchlistRemoved={(tmdbId) => {
+              setWatchlistTmdbIds((prev) => {
+                const next = new Set(prev);
+                next.delete(tmdbId);
+                return next;
+              });
+
+              setDiscover((prev) => [...prev]);
+            }}
+            onFavouriteRemoved={(tmdbId) => {
+              setFavouriteTmdbIds((prev) => {
+                const next = new Set(prev);
+                next.delete(tmdbId);
+                return next;
+              });
+
+              setDiscover((prev) => [...prev]);
+            }}
+          />
+        </section>
+      )}
+
+      <nav className="cit-mobile-nav" aria-label="Mobile navigation">
+        <button
+          type="button"
+          className={
+            activeView === "discover"
+              ? "cit-mobile-nav-button--active"
+              : ""
+          }
+          onClick={() => setActiveView("discover")}
+        >
+          Discover
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeView === "watchlist"
+              ? "cit-mobile-nav-button--active"
+              : ""
+          }
+          onClick={() => setActiveView("watchlist")}
+        >
+          My List
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeView === "favourites"
+              ? "cit-mobile-nav-button--active"
+              : ""
+          }
+          onClick={() => setActiveView("favourites")}
+        >
+          Favourites
+        </button>
+      </nav>
 
       {isEnriching && (
         <div style={{position:"sticky", top:8, zIndex:1000, background:"#fff", border:"1px solid #eee", borderRadius:8, padding:"8px 10px", display:"flex", alignItems:"center", gap:10, marginBottom:10}}>
@@ -1300,7 +1854,7 @@ const saveFavouriteFilm = async (film) => {
         </>
       )}
 
-      {!filtered.length && (
+      {false && !filtered.length && (
         <div style={{color:"#666"}}>
           Upload your Excel to begin, or use the Load button above to pull a saved list.
         </div>

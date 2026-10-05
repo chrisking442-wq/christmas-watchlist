@@ -7,6 +7,8 @@ function normaliseProviderName(name = "") {
     "Amazon Prime Video": "Prime Video",
     "Amazon Prime Video with Ads": "Prime Video",
     "Netflix basic with Ads": "Netflix",
+    "Netflix Standard with Ads": "Netflix",
+    "Netflix Kids": "Netflix",
     "Disney Plus": "Disney+",
     "Paramount Plus": "Paramount+",
     "Apple TV Plus": "Apple TV+",
@@ -31,59 +33,11 @@ function uniqueProviders(providers = []) {
       provider.provider_name || ""
     )}__${provider.provider_type || ""}`;
 
-    if (seen.has(key)) return false;
+    if (!key || seen.has(key)) return false;
+
     seen.add(key);
     return true;
   });
-}
-
-function ProviderChips({ providers }) {
-  if (!providers?.length) return null;
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 6,
-        marginTop: 6,
-      }}
-    >
-      {providers.map((provider) => (
-        <span
-          key={`${provider.provider_id || provider.provider_name}__${
-            provider.provider_type
-          }`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "4px 8px",
-            border: "1px solid #e5e7eb",
-            borderRadius: 999,
-            background: "#fff",
-            fontSize: 12,
-          }}
-        >
-          {provider.logo_path ? (
-            <img
-              src={`${TMDB_IMG}/w45${provider.logo_path}`}
-              alt=""
-              aria-hidden="true"
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 5,
-                objectFit: "cover",
-              }}
-            />
-          ) : null}
-
-          {normaliseProviderName(provider.provider_name)}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function formatCheckedAt(value) {
@@ -100,199 +54,39 @@ function formatCheckedAt(value) {
     checked.getMonth() === today.getMonth() &&
     checked.getDate() === today.getDate();
 
-  if (sameDay) return "Last checked today";
+  if (sameDay) return "Checked today";
 
-  return `Last checked ${checked.toLocaleDateString("en-GB", {
+  return `Checked ${checked.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
-    year: "numeric",
   })}`;
 }
 
-function WhereToWatch({
-  availability,
-  filmId,
-  alertActive,
-  alertSaving,
-  onToggleAlert,
-}) {
-  if (!availability) {
-    return (
-      <div
-        style={{
-          marginTop: 10,
-          padding: 9,
-          border: "1px solid #e5e7eb",
-          borderRadius: 8,
-          background: "#fafafa",
-          fontSize: 12,
-          color: "#666",
-        }}
-      >
-        UK availability hasn’t been checked yet.
-      </div>
-    );
-  }
+function ProviderBadges({ providers, max = 3 }) {
+  const visible = uniqueProviders(providers).slice(0, max);
 
-  const subscription = uniqueProviders(
-    availability.providers.filter(
-      (provider) => provider.provider_type === "subscription"
-    )
-  );
-
-  const free = uniqueProviders(
-    availability.providers.filter(
-      (provider) => provider.provider_type === "free"
-    )
-  );
-
-  const ads = uniqueProviders(
-    availability.providers.filter(
-      (provider) => provider.provider_type === "ads"
-    )
-  );
-
-  const hasStreaming =
-    subscription.length > 0 || free.length > 0 || ads.length > 0;
+  if (!visible.length) return null;
 
   return (
-    <div
-      style={{
-        marginTop: 10,
-        padding: 9,
-        border: "1px solid #e5e7eb",
-        borderRadius: 8,
-        background: "#fafafa",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-        }}
-      >
-        Where to watch in the UK
-      </div>
-
-      {!hasStreaming ? (
-        <>
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 12,
-              color: "#555",
-              lineHeight: 1.4,
-            }}
-          >
-            Not currently included with a UK streaming service.
-          </div>
-
-          <button
-            onClick={() => onToggleAlert(filmId)}
-            disabled={alertSaving}
-            style={{
-              marginTop: 8,
-              border: alertActive
-                ? "1px solid #86efac"
-                : "1px solid #d1d5db",
-              background: alertActive ? "#f0fdf4" : "#fff",
-              padding: "6px 9px",
-              borderRadius: 8,
-              cursor: alertSaving ? "not-allowed" : "pointer",
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {alertSaving
-              ? "Saving…"
-              : alertActive
-              ? "🔔 Watching for availability"
-              : "🔔 Tell me when available"}
-          </button>
-        </>
-      ) : (
-        <>
-          {subscription.length > 0 && (
-            <div style={{ marginTop: 7 }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#666",
-                }}
-              >
-                Subscription
-              </div>
-              <ProviderChips providers={subscription} />
-            </div>
-          )}
-
-          {free.length > 0 && (
-            <div style={{ marginTop: 7 }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#666",
-                }}
-              >
-                Free
-              </div>
-              <ProviderChips providers={free} />
-            </div>
-          )}
-
-          {ads.length > 0 && (
-            <div style={{ marginTop: 7 }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#666",
-                }}
-              >
-                Free with ads
-              </div>
-              <ProviderChips providers={ads} />
-            </div>
-          )}
-        </>
-      )}
-
-      {availability.watchUrl && (
-        <div style={{ marginTop: 8 }}>
-          <a
-            href={availability.watchUrl}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              fontSize: 12,
-              color: "#1d4ed8",
-            }}
-          >
-            View watch options
-          </a>
-        </div>
-      )}
-
-      {availability.checkedAt && (
-        <div
-          style={{
-            marginTop: 7,
-            fontSize: 10,
-            color: "#777",
-          }}
+    <div className="cit-library-provider-row">
+      {visible.map((provider) => (
+        <span
+          key={`${provider.provider_id || provider.provider_name}__${
+            provider.provider_type
+          }`}
+          className="cit-library-provider"
         >
-          {formatCheckedAt(availability.checkedAt)}
-        </div>
-      )}
+          {provider.logo_path ? (
+            <img
+              src={`${TMDB_IMG}/w45${provider.logo_path}`}
+              alt=""
+              aria-hidden="true"
+            />
+          ) : null}
 
-      <div
-        style={{
-          marginTop: 4,
-          fontSize: 10,
-          color: "#888",
-        }}
-      >
-        Availability data powered by JustWatch.
-      </div>
+          <span>{normaliseProviderName(provider.provider_name)}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -300,56 +94,187 @@ function WhereToWatch({
 export default function MyLibrary({
   supabase,
   session,
+  listType = "watchlist",
   onWatchlistRemoved,
   onFavouriteRemoved,
+  onBrowseDiscover,
 }) {
-  const [lists, setLists] = useState([]);
   const [selectedList, setSelectedList] = useState(null);
   const [items, setItems] = useState([]);
   const [availabilityByFilmId, setAvailabilityByFilmId] = useState({});
   const [alertFilmIds, setAlertFilmIds] = useState(new Set());
   const [triggeredAlerts, setTriggeredAlerts] = useState([]);
   const [alertSavingFilmIds, setAlertSavingFilmIds] = useState(new Set());
-  const [loadingLists, setLoadingLists] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState("");
 
+  const pageTitle =
+    listType === "favourites" ? "Favourites" : "My Christmas List";
+
   useEffect(() => {
     if (!supabase || !session?.user) {
-      setLists([]);
       setSelectedList(null);
       setItems([]);
       setAvailabilityByFilmId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSelectedList() {
+      setLoadingItems(true);
+      setError("");
+      setItems([]);
+      setAvailabilityByFilmId({});
+
+      const { data: list, error: listError } = await supabase
+        .from("v2_lists")
+        .select("id, name, list_type")
+        .eq("user_id", session.user.id)
+        .eq("list_type", listType)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (listError) {
+        console.error(listError);
+        setError(listError.message);
+        setSelectedList(null);
+        setLoadingItems(false);
+        return;
+      }
+
+      if (!list) {
+        setSelectedList(null);
+        setItems([]);
+        setLoadingItems(false);
+        return;
+      }
+
+      setSelectedList(list);
+
+      const { data: itemData, error: itemError } = await supabase
+        .from("v2_list_items")
+        .select(`
+          id,
+          added_at,
+          v2_films (
+            id,
+            tmdb_id,
+            title,
+            release_year,
+            overview,
+            poster_path
+          )
+        `)
+        .eq("list_id", list.id)
+        .order("added_at", { ascending: false });
+
+      if (cancelled) return;
+
+      if (itemError) {
+        console.error(itemError);
+        setError(itemError.message);
+        setItems([]);
+        setLoadingItems(false);
+        return;
+      }
+
+      const loadedItems = itemData || [];
+      setItems(loadedItems);
+
+      const filmIds = loadedItems
+        .map((item) => item.v2_films?.id)
+        .filter(Boolean);
+
+      if (!filmIds.length) {
+        setAvailabilityByFilmId({});
+        setLoadingItems(false);
+        return;
+      }
+
+      const { data: availabilityData, error: availabilityError } =
+        await supabase
+          .from("v2_streaming_availability")
+          .select(`
+            film_id,
+            provider_id,
+            provider_name,
+            provider_type,
+            logo_path,
+            watch_url,
+            checked_at
+          `)
+          .eq("region", "GB")
+          .in("film_id", filmIds);
+
+      if (cancelled) return;
+
+      if (availabilityError) {
+        console.error(
+          "Couldn't load cached UK availability:",
+          availabilityError
+        );
+        setLoadingItems(false);
+        return;
+      }
+
+      const grouped = {};
+
+      for (const row of availabilityData || []) {
+        const key = String(row.film_id);
+
+        if (!grouped[key]) {
+          grouped[key] = {
+            providers: [],
+            watchUrl: row.watch_url || null,
+            checkedAt: row.checked_at || null,
+          };
+        }
+
+        if (row.provider_type !== "none") {
+          grouped[key].providers.push(row);
+        }
+
+        if (!grouped[key].watchUrl && row.watch_url) {
+          grouped[key].watchUrl = row.watch_url;
+        }
+
+        if (
+          !grouped[key].checkedAt ||
+          new Date(row.checked_at) > new Date(grouped[key].checkedAt)
+        ) {
+          grouped[key].checkedAt = row.checked_at;
+        }
+      }
+
+      setAvailabilityByFilmId(grouped);
+      setLoadingItems(false);
+    }
+
+    loadSelectedList();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, session, listType]);
+
+  useEffect(() => {
+    if (!supabase || !session?.user) {
       setAlertFilmIds(new Set());
       setTriggeredAlerts([]);
       return;
     }
 
-    async function loadLists() {
-      setLoadingLists(true);
-      setError("");
-
-      const { data, error } = await supabase
-        .from("v2_lists")
-        .select("id, name, list_type")
-        .eq("user_id", session.user.id)
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        setError(error.message);
-        setLists([]);
-      } else {
-        setLists(data || []);
-      }
-
-      setLoadingLists(false);
-    }
+    let cancelled = false;
 
     async function loadAvailabilityAlerts() {
       const { data, error } = await supabase
         .from("v2_availability_alerts")
         .select("id, film_id, active, last_notified_at")
         .eq("user_id", session.user.id);
+
+      if (cancelled) return;
 
       if (error) {
         console.error("Couldn't load availability alerts:", error);
@@ -396,6 +321,8 @@ export default function MyLibrary({
           .in("provider_type", ["subscription", "free", "ads"]),
       ]);
 
+      if (cancelled) return;
+
       if (filmError) {
         console.error("Couldn't load alert films:", filmError);
       }
@@ -441,7 +368,6 @@ export default function MyLibrary({
 
             return {
               id: row.id,
-              filmId: row.film_id,
               title: film.title || "A film you're watching",
               releaseYear: film.release_year || null,
               posterPath: film.poster_path || null,
@@ -459,109 +385,12 @@ export default function MyLibrary({
       );
     }
 
-    loadLists();
     loadAvailabilityAlerts();
+
+    return () => {
+      cancelled = true;
+    };
   }, [supabase, session]);
-
-  async function loadAvailabilityForItems(listItems) {
-    const filmIds = listItems
-      .map((item) => item.v2_films?.id)
-      .filter(Boolean);
-
-    if (!filmIds.length) {
-      setAvailabilityByFilmId({});
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("v2_streaming_availability")
-      .select(`
-        film_id,
-        provider_id,
-        provider_name,
-        provider_type,
-        logo_path,
-        watch_url,
-        checked_at
-      `)
-      .eq("region", "GB")
-      .in("film_id", filmIds);
-
-    if (error) {
-      console.error("Couldn't load cached UK availability:", error);
-      return;
-    }
-
-    const grouped = {};
-
-    for (const row of data || []) {
-      const key = String(row.film_id);
-
-      if (!grouped[key]) {
-        grouped[key] = {
-          providers: [],
-          watchUrl: row.watch_url || null,
-          checkedAt: row.checked_at || null,
-        };
-      }
-
-      if (row.provider_type !== "none") {
-        grouped[key].providers.push(row);
-      }
-
-      if (!grouped[key].watchUrl && row.watch_url) {
-        grouped[key].watchUrl = row.watch_url;
-      }
-
-      if (
-        !grouped[key].checkedAt ||
-        new Date(row.checked_at) > new Date(grouped[key].checkedAt)
-      ) {
-        grouped[key].checkedAt = row.checked_at;
-      }
-    }
-
-    setAvailabilityByFilmId(grouped);
-  }
-
-  async function openList(list) {
-    setSelectedList(list);
-    setLoadingItems(true);
-    setError("");
-    setAvailabilityByFilmId({});
-
-    const { data, error } = await supabase
-      .from("v2_list_items")
-      .select(`
-        id,
-        added_at,
-        v2_films (
-          id,
-          tmdb_id,
-          title,
-          release_year,
-          overview,
-          poster_path
-        )
-      `)
-      .eq("list_id", list.id)
-      .order("added_at", { ascending: false });
-
-    if (error) {
-      console.error(error);
-      setError(error.message);
-      setItems([]);
-      setLoadingItems(false);
-      return;
-    }
-
-    const loadedItems = data || [];
-    setItems(loadedItems);
-
-    await loadAvailabilityForItems(loadedItems);
-
-    setLoadingItems(false);
-  }
 
   async function toggleAvailabilityAlert(filmId) {
     if (!filmId || !session?.user) return;
@@ -650,8 +479,10 @@ export default function MyLibrary({
   }
 
   async function removeItem(itemId, tmdbId) {
+    if (!selectedList) return;
+
     const confirmed = window.confirm(
-      "Remove this film from " + selectedList.name + "?"
+      `Remove this film from ${selectedList.name}?`
     );
 
     if (!confirmed) return;
@@ -670,7 +501,7 @@ export default function MyLibrary({
     setItems((prev) => prev.filter((item) => item.id !== itemId));
 
     if (
-      selectedList?.list_type === "watchlist" &&
+      listType === "watchlist" &&
       onWatchlistRemoved &&
       tmdbId
     ) {
@@ -678,7 +509,7 @@ export default function MyLibrary({
     }
 
     if (
-      selectedList?.list_type === "favourites" &&
+      listType === "favourites" &&
       onFavouriteRemoved &&
       tmdbId
     ) {
@@ -686,291 +517,563 @@ export default function MyLibrary({
     }
   }
 
-  if (!session?.user) return null;
+  if (!session?.user) {
+    return (
+      <div className="cit-library-empty">
+        Sign in to view your saved films.
+      </div>
+    );
+  }
 
   return (
-    <div
-      style={{
-        marginBottom: 18,
-        padding: 14,
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        background: "#fff",
-      }}
-    >
-      <h2 style={{ margin: "0 0 10px" }}>My Library</h2>
+    <div className="cit-library-view">
+      <style>{`
+        .cit-library-view {
+          margin: 24px 0 30px;
+        }
 
-      {loadingLists && <div>Loading your lists…</div>}
+        .cit-library-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+
+        .cit-library-header h1 {
+          margin: 0;
+          color: #123b2d;
+          font-size: clamp(25px, 3.8vw, 36px);
+          line-height: 1.05;
+          letter-spacing: -0.035em;
+        }
+
+        .cit-library-count {
+          margin-top: 7px;
+          color: #68756f;
+          font-size: 13px;
+        }
+
+        .cit-library-alerts {
+          margin-bottom: 16px;
+          padding: 11px;
+          border: 1px solid #a8d5b8;
+          border-radius: 12px;
+          background: #edf7f0;
+        }
+
+        .cit-library-alerts-title {
+          margin-bottom: 8px;
+          color: #214c39;
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .cit-library-alert {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px;
+          border: 1px solid #cce6d4;
+          border-radius: 9px;
+          background: rgba(255,255,255,.84);
+        }
+
+        .cit-library-alert + .cit-library-alert {
+          margin-top: 7px;
+        }
+
+        .cit-library-alert img {
+          width: 38px;
+          height: 57px;
+          object-fit: cover;
+          border-radius: 5px;
+        }
+
+        .cit-library-alert-copy {
+          flex: 1 1 160px;
+          min-width: 0;
+        }
+
+        .cit-library-alert-title {
+          color: #18382f;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .cit-library-alert-text {
+          margin-top: 2px;
+          color: #4c6259;
+          font-size: 11px;
+        }
+
+        .cit-library-alert a {
+          display: inline-block;
+          margin-top: 3px;
+          color: #244f40;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .cit-library-alert-dismiss {
+          border: 1px solid #d5ddd8;
+          background: #fff;
+          color: #52645c;
+          padding: 5px 7px;
+          border-radius: 7px;
+          cursor: pointer;
+          font-size: 10px;
+        }
+
+        .cit-library-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .cit-library-card {
+          min-width: 0;
+          overflow: hidden;
+          border: 1px solid #e2ddd4;
+          border-radius: 14px;
+          background: rgba(255,255,255,.9);
+          box-shadow: 0 3px 12px rgba(32, 43, 37, 0.045);
+        }
+
+        .cit-library-poster-wrap {
+          aspect-ratio: 2 / 3;
+          overflow: hidden;
+          background: #eae6df;
+        }
+
+        .cit-library-poster {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+        }
+
+        .cit-library-no-poster {
+          width: 100%;
+          height: 100%;
+          display: grid;
+          place-items: center;
+          color: #7b837f;
+          font-size: 12px;
+        }
+
+        .cit-library-body {
+          padding: 11px 11px 12px;
+        }
+
+        .cit-library-title {
+          min-height: 38px;
+          color: #18382f;
+          font-size: 15px;
+          font-weight: 780;
+          line-height: 1.25;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          overflow: hidden;
+        }
+
+        .cit-library-year {
+          margin-top: 4px;
+          color: #7b837f;
+          font-size: 11px;
+        }
+
+        .cit-library-availability {
+          min-height: 55px;
+          margin-top: 10px;
+        }
+
+        .cit-library-provider-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+
+        .cit-library-provider {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          min-width: 0;
+          max-width: 100%;
+          border: 1px solid #e0ddd6;
+          background: #fff;
+          color: #405149;
+          border-radius: 999px;
+          padding: 4px 7px;
+          font-size: 10px;
+          line-height: 1;
+        }
+
+        .cit-library-provider img {
+          width: 17px;
+          height: 17px;
+          border-radius: 4px;
+          object-fit: cover;
+        }
+
+        .cit-library-provider span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .cit-library-muted {
+          color: #7e8782;
+          font-size: 11px;
+          line-height: 1.4;
+        }
+
+        .cit-library-watch-link {
+          display: inline-block;
+          margin-top: 7px;
+          color: #244f40;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .cit-library-alert-button {
+          margin-top: 7px;
+          border: 1px solid #b8c9c0;
+          background: #fff;
+          color: #315447;
+          padding: 6px 8px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .cit-library-alert-button--active {
+          border-color: #9bcbaa;
+          background: #edf7f0;
+        }
+
+        .cit-library-checked {
+          margin-top: 6px;
+          color: #989c99;
+          font-size: 9px;
+        }
+
+        .cit-library-remove {
+          margin-top: 10px;
+          border: 0;
+          background: transparent;
+          color: #8c3f3f;
+          padding: 0;
+          cursor: pointer;
+          font-size: 10px;
+          font-weight: 650;
+        }
+
+        .cit-library-empty {
+          margin: 28px 0;
+          color: #6f7974;
+          font-size: 13px;
+        }
+
+        .cit-library-empty-card {
+          max-width: 520px;
+          padding: 24px;
+          border: 1px solid #e0dbd2;
+          border-radius: 14px;
+          background: rgba(255,255,255,.64);
+        }
+
+        .cit-library-empty-card h2 {
+          margin: 0;
+          color: #18382f;
+          font-size: 18px;
+        }
+
+        .cit-library-empty-card p {
+          margin: 8px 0 0;
+          color: #6f7974;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        .cit-library-empty-card button {
+          margin-top: 14px;
+          border: 1px solid #123b2d;
+          background: #123b2d;
+          color: #fff;
+          padding: 8px 12px;
+          border-radius: 9px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 750;
+        }
+
+        @media (max-width: 1050px) {
+          .cit-library-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 720px) {
+          .cit-library-view {
+            margin-top: 20px;
+          }
+
+          .cit-library-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+          }
+
+          .cit-library-card {
+            border-radius: 12px;
+          }
+
+          .cit-library-body {
+            padding: 9px 9px 10px;
+          }
+
+          .cit-library-title {
+            min-height: 36px;
+            font-size: 13px;
+          }
+
+          .cit-library-provider {
+            font-size: 9px;
+            padding: 3px 6px;
+          }
+
+          .cit-library-provider img {
+            width: 15px;
+            height: 15px;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .cit-library-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      <div className="cit-library-header">
+        <div>
+          <h1>{pageTitle}</h1>
+          <div className="cit-library-count">
+            {loadingItems
+              ? "Loading…"
+              : `${items.length} ${
+                  items.length === 1 ? "film" : "films"
+                }`}
+          </div>
+        </div>
+      </div>
 
       {error && (
-        <div style={{ color: "#b91c1c", marginBottom: 10 }}>
+        <div
+          style={{
+            marginBottom: 12,
+            color: "#a22626",
+            fontSize: 12,
+          }}
+        >
           {error}
         </div>
       )}
 
       {triggeredAlerts.length > 0 && (
-        <div
-          style={{
-            marginBottom: 14,
-            padding: 12,
-            border: "1px solid #86efac",
-            borderRadius: 10,
-            background: "#f0fdf4",
-          }}
-        >
-          <div
-            style={{
-              fontWeight: 700,
-              marginBottom: 8,
-            }}
-          >
+        <div className="cit-library-alerts">
+          <div className="cit-library-alerts-title">
             🎉 Now available
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gap: 8,
-            }}
-          >
-            {triggeredAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  padding: 9,
-                  border: "1px solid #bbf7d0",
-                  borderRadius: 8,
-                  background: "#fff",
-                }}
-              >
-                {alert.posterPath ? (
-                  <img
-                    src={`${TMDB_IMG}/w92${alert.posterPath}`}
-                    alt=""
-                    aria-hidden="true"
-                    style={{
-                      width: 42,
-                      height: 63,
-                      objectFit: "cover",
-                      borderRadius: 5,
-                    }}
-                  />
-                ) : null}
+          {triggeredAlerts.map((alert) => (
+            <div key={alert.id} className="cit-library-alert">
+              {alert.posterPath ? (
+                <img
+                  src={`${TMDB_IMG}/w92${alert.posterPath}`}
+                  alt=""
+                  aria-hidden="true"
+                />
+              ) : null}
 
-                <div
-                  style={{
-                    flex: "1 1 180px",
-                    minWidth: 0,
-                  }}
-                >
-                  <div style={{ fontWeight: 700 }}>
-                    {alert.title}
-                    {alert.releaseYear
-                      ? ` (${alert.releaseYear})`
-                      : ""}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 3,
-                      fontSize: 12,
-                      color: "#444",
-                    }}
-                  >
-                    {alert.providers.length
-                      ? `Now available on ${alert.providers.join(", ")}.`
-                      : "Now available to stream in the UK."}
-                  </div>
-
-                  {alert.watchUrl && (
-                    <a
-                      href={alert.watchUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        display: "inline-block",
-                        marginTop: 4,
-                        fontSize: 12,
-                        color: "#1d4ed8",
-                      }}
-                    >
-                      View watch options
-                    </a>
-                  )}
+              <div className="cit-library-alert-copy">
+                <div className="cit-library-alert-title">
+                  {alert.title}
+                  {alert.releaseYear
+                    ? ` (${alert.releaseYear})`
+                    : ""}
                 </div>
 
-                <button
-                  onClick={() => dismissTriggeredAlert(alert.id)}
-                  style={{
-                    border: "1px solid #d1d5db",
-                    background: "#fff",
-                    padding: "6px 9px",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontSize: 12,
-                  }}
-                >
-                  Dismiss
-                </button>
+                <div className="cit-library-alert-text">
+                  {alert.providers.length
+                    ? `Now available on ${alert.providers.join(", ")}.`
+                    : "Now available to stream in the UK."}
+                </div>
+
+                {alert.watchUrl && (
+                  <a
+                    href={alert.watchUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View watch options
+                  </a>
+                )}
               </div>
-            ))}
-          </div>
+
+              <button
+                type="button"
+                className="cit-library-alert-dismiss"
+                onClick={() => dismissTriggeredAlert(alert.id)}
+              >
+                Dismiss
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          marginBottom: selectedList ? 18 : 0,
-        }}
-      >
-        {lists.map((list) => (
-          <button
-            key={list.id}
-            onClick={() => openList(list)}
-            style={{
-              border:
-                selectedList?.id === list.id
-                  ? "2px solid #166534"
-                  : "1px solid #ddd",
-              background:
-                selectedList?.id === list.id ? "#f0fdf4" : "#fff",
-              borderRadius: 10,
-              padding: "10px 14px",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            {list.name}
+      {!loadingItems && !selectedList && (
+        <div className="cit-library-empty-card">
+          <h2>This list isn't available yet</h2>
+          <p>Head back to Discover and start building your Christmas watchlist.</p>
+          <button type="button" onClick={onBrowseDiscover}>
+            Browse films
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
-      {selectedList && (
-        <div>
-          <h3 style={{ margin: "0 0 12px" }}>
-            {selectedList.name}
-          </h3>
+      {!loadingItems && selectedList && items.length === 0 && (
+        <div className="cit-library-empty-card">
+          <h2>
+            {listType === "favourites"
+              ? "No favourites yet"
+              : "Your Christmas list is empty"}
+          </h2>
+          <p>
+            {listType === "favourites"
+              ? "Save the films you really love using the heart on Discover."
+              : "Browse the catalogue and add the films you want to watch this Christmas."}
+          </p>
+          <button type="button" onClick={onBrowseDiscover}>
+            Browse films
+          </button>
+        </div>
+      )}
 
-          {loadingItems && <div>Loading films…</div>}
+      {!loadingItems && items.length > 0 && (
+        <div className="cit-library-grid">
+          {items.map((item) => {
+            const film = item.v2_films;
+            const filmId = film?.id;
+            const filmKey = String(filmId || "");
+            const availability =
+              availabilityByFilmId[filmKey] || null;
 
-          {!loadingItems && items.length === 0 && (
-            <div style={{ color: "#666" }}>
-              No films in this list yet.
-            </div>
-          )}
+            const providers = uniqueProviders(
+              availability?.providers || []
+            );
 
-          {!loadingItems && items.length > 0 && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: 12,
-              }}
-            >
-              {items.map((item) => {
-                const film = item.v2_films;
-                const filmId = film?.id;
-                const filmKey = String(filmId || "");
-                const availability =
-                  availabilityByFilmId[filmKey] || null;
+            const hasStreaming = providers.length > 0;
+            const alertActive = alertFilmIds.has(filmKey);
+            const alertSaving = alertSavingFilmIds.has(filmKey);
 
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "90px 1fr",
-                      gap: 12,
-                      alignItems: "start",
-                      border: "1px solid #eee",
-                      borderRadius: 12,
-                      padding: 10,
-                    }}
-                  >
-                    {film?.poster_path ? (
-                      <img
-                        src={`${TMDB_IMG}/w185${film.poster_path}`}
-                        alt={film.title}
-                        loading="lazy"
-                        style={{
-                          width: 90,
-                          height: 135,
-                          objectFit: "cover",
-                          borderRadius: 8,
-                        }}
-                      />
+            return (
+              <article key={item.id} className="cit-library-card">
+                <div className="cit-library-poster-wrap">
+                  {film?.poster_path ? (
+                    <img
+                      className="cit-library-poster"
+                      src={`${TMDB_IMG}/w342${film.poster_path}`}
+                      alt={film.title}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="cit-library-no-poster">
+                      No poster
+                    </div>
+                  )}
+                </div>
+
+                <div className="cit-library-body">
+                  <div className="cit-library-title">
+                    {film?.title || "Untitled film"}
+                  </div>
+
+                  <div className="cit-library-year">
+                    {film?.release_year || "Year unknown"}
+                  </div>
+
+                  <div className="cit-library-availability">
+                    {!availability ? (
+                      <div className="cit-library-muted">
+                        UK availability hasn't been checked yet.
+                      </div>
+                    ) : hasStreaming ? (
+                      <>
+                        <ProviderBadges providers={providers} max={3} />
+
+                        {availability.watchUrl && (
+                          <a
+                            className="cit-library-watch-link"
+                            href={availability.watchUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View watch options
+                          </a>
+                        )}
+                      </>
                     ) : (
-                      <div
-                        style={{
-                          width: 90,
-                          height: 135,
-                          background: "#f3f4f6",
-                          borderRadius: 8,
-                        }}
-                      />
+                      <>
+                        <div className="cit-library-muted">
+                          Not currently included with a UK streaming service.
+                        </div>
+
+                        <button
+                          type="button"
+                          className={`cit-library-alert-button ${
+                            alertActive
+                              ? "cit-library-alert-button--active"
+                              : ""
+                          }`}
+                          onClick={() =>
+                            toggleAvailabilityAlert(filmId)
+                          }
+                          disabled={alertSaving}
+                        >
+                          {alertSaving
+                            ? "Saving…"
+                            : alertActive
+                            ? "🔔 Watching for availability"
+                            : "🔔 Tell me when available"}
+                        </button>
+                      </>
                     )}
 
-                    <div style={{ minWidth: 0 }}>
-                      <strong>
-                        {film?.title}
-                        {film?.release_year
-                          ? ` (${film.release_year})`
-                          : ""}
-                      </strong>
-
-                      {film?.overview && (
-                        <div
-                          style={{
-                            marginTop: 6,
-                            fontSize: 13,
-                            color: "#444",
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          {film.overview.length > 180
-                            ? film.overview.slice(0, 180) + "…"
-                            : film.overview}
-                        </div>
-                      )}
-
-                      <WhereToWatch
-                        availability={availability}
-                        filmId={filmId}
-                        alertActive={alertFilmIds.has(filmKey)}
-                        alertSaving={alertSavingFilmIds.has(filmKey)}
-                        onToggleAlert={toggleAvailabilityAlert}
-                      />
-
-                      <button
-                        onClick={() =>
-                          removeItem(item.id, film?.tmdb_id)
-                        }
-                        style={{
-                          marginTop: 10,
-                          border: "1px solid #fecaca",
-                          background: "#fff1f2",
-                          padding: "6px 9px",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                          fontSize: 12,
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </div>
+                    {availability?.checkedAt && (
+                      <div className="cit-library-checked">
+                        {formatCheckedAt(availability.checkedAt)} ·
+                        JustWatch
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  <button
+                    type="button"
+                    className="cit-library-remove"
+                    onClick={() =>
+                      removeItem(item.id, film?.tmdb_id)
+                    }
+                  >
+                    Remove from {pageTitle}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </div>

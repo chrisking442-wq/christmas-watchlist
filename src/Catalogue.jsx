@@ -3,13 +3,26 @@ import React, { useEffect, useState } from "react";
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
 
-const AVAILABILITY_CACHE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const AVAILABILITY_CACHE_MS = 24 * 60 * 60 * 1000;
+
+const PLATFORM_FILTERS = [
+  "",
+  "Netflix",
+  "Disney+",
+  "Prime Video",
+  "ITVX",
+  "BBC iPlayer",
+  "NOW",
+  "Channel 4",
+];
 
 function normaliseProviderName(name = "") {
   const direct = {
     "Amazon Prime Video": "Prime Video",
     "Amazon Prime Video with Ads": "Prime Video",
     "Netflix basic with Ads": "Netflix",
+    "Netflix Standard with Ads": "Netflix",
+    "Netflix Kids": "Netflix",
     "Disney Plus": "Disney+",
     "Paramount Plus": "Paramount+",
     "Apple TV Plus": "Apple TV+",
@@ -30,61 +43,13 @@ function uniqueProviders(providers = []) {
   const seen = new Set();
 
   return providers.filter((provider) => {
-    const key =
-      provider.provider_id ||
-      normaliseProviderName(provider.provider_name || "");
+    const key = normaliseProviderName(provider.provider_name || "");
 
-    if (seen.has(key)) return false;
+    if (!key || seen.has(key)) return false;
+
     seen.add(key);
     return true;
   });
-}
-
-function ProviderChips({ providers }) {
-  if (!providers?.length) return null;
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 6,
-        marginTop: 6,
-      }}
-    >
-      {providers.map((provider) => (
-        <span
-          key={provider.provider_id || provider.provider_name}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "4px 8px",
-            border: "1px solid #e5e7eb",
-            borderRadius: 999,
-            background: "#fff",
-            fontSize: 12,
-          }}
-        >
-          {provider.logo_path ? (
-            <img
-              src={`${TMDB_IMG}/w45${provider.logo_path}`}
-              alt=""
-              aria-hidden="true"
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 5,
-                objectFit: "cover",
-              }}
-            />
-          ) : null}
-
-          {normaliseProviderName(provider.provider_name)}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function chunk(items, size) {
@@ -95,6 +60,57 @@ function chunk(items, size) {
   }
 
   return result;
+}
+
+function formatCheckedAt(value) {
+  if (!value) return "";
+
+  const checked = new Date(value);
+
+  if (Number.isNaN(checked.getTime())) return "";
+
+  const today = new Date();
+
+  const sameDay =
+    checked.getFullYear() === today.getFullYear() &&
+    checked.getMonth() === today.getMonth() &&
+    checked.getDate() === today.getDate();
+
+  if (sameDay) return "Checked today";
+
+  return `Checked ${checked.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  })}`;
+}
+
+function ProviderBadges({ providers, max = 2, compact = false }) {
+  const visible = uniqueProviders(providers).slice(0, max);
+
+  if (!visible.length) return null;
+
+  return (
+    <div className="cit-provider-row">
+      {visible.map((provider) => (
+        <span
+          key={provider.provider_id || provider.provider_name}
+          className={`cit-provider-badge ${
+            compact ? "cit-provider-badge--compact" : ""
+          }`}
+        >
+          {provider.logo_path ? (
+            <img
+              src={`${TMDB_IMG}/w45${provider.logo_path}`}
+              alt=""
+              aria-hidden="true"
+            />
+          ) : null}
+
+          <span>{normaliseProviderName(provider.provider_name)}</span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export default function Catalogue({
@@ -112,6 +128,9 @@ export default function Catalogue({
   const [platform, setPlatform] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedFilm, setSelectedFilm] = useState(null);
+  const [alertFilmIds, setAlertFilmIds] = useState(new Set());
+  const [alertSavingFilmIds, setAlertSavingFilmIds] = useState(new Set());
 
   const [watchProviders, setWatchProviders] = useState({});
   const [availabilityCheckedAt, setAvailabilityCheckedAt] = useState({});
@@ -168,9 +187,10 @@ export default function Catalogue({
 
       setFilms(rows);
 
-      // Load any UK availability we already cached in Supabase.
       const filmIds = rows.map((film) => film.id).filter(Boolean);
-      const filmById = new Map(rows.map((film) => [String(film.id), film]));
+      const filmById = new Map(
+        rows.map((film) => [String(film.id), film])
+      );
 
       const cachedRows = [];
 
@@ -207,6 +227,7 @@ export default function Catalogue({
 
         for (const row of cachedRows) {
           const film = filmById.get(String(row.film_id));
+
           if (!film?.tmdb_id) continue;
 
           const key = film.tmdb_id;
@@ -220,9 +241,14 @@ export default function Catalogue({
             };
           }
 
-          if (row.provider_type === "none") {
-            // Sentinel row: this film was checked and no streaming offers existed.
+          if (
+            !checkedMap[key] ||
+            new Date(row.checked_at) > new Date(checkedMap[key])
+          ) {
             checkedMap[key] = row.checked_at;
+          }
+
+          if (row.provider_type === "none") {
             continue;
           }
 
@@ -243,13 +269,6 @@ export default function Catalogue({
           if (!providerMap[key].link && row.watch_url) {
             providerMap[key].link = row.watch_url;
           }
-
-          if (
-            !checkedMap[key] ||
-            new Date(row.checked_at) > new Date(checkedMap[key])
-          ) {
-            checkedMap[key] = row.checked_at;
-          }
         }
 
         setWatchProviders(providerMap);
@@ -266,11 +285,63 @@ export default function Catalogue({
     };
   }, [supabase, refreshKey]);
 
+  useEffect(() => {
+    if (!supabase || !session?.user) {
+      setAlertFilmIds(new Set());
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAvailabilityAlerts() {
+      const { data, error } = await supabase
+        .from("v2_availability_alerts")
+        .select("film_id")
+        .eq("user_id", session.user.id)
+        .eq("active", true);
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Couldn't load availability alerts:", error);
+        return;
+      }
+
+      setAlertFilmIds(
+        new Set((data || []).map((row) => String(row.film_id)))
+      );
+    }
+
+    loadAvailabilityAlerts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, session]);
+
+  useEffect(() => {
+    if (!selectedFilm) return;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setSelectedFilm(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedFilm]);
+
   function isAvailabilityFresh(tmdbId) {
     const checkedAt = availabilityCheckedAt[tmdbId];
+
     if (!checkedAt) return false;
 
     const checkedMs = Date.parse(checkedAt);
+
     if (!Number.isFinite(checkedMs)) return false;
 
     return Date.now() - checkedMs < AVAILABILITY_CACHE_MS;
@@ -313,6 +384,7 @@ export default function Catalogue({
       }
 
       const data = await response.json();
+
       const ukProviders = data?.results?.GB || {
         flatrate: [],
         free: [],
@@ -421,13 +493,80 @@ export default function Catalogue({
       return;
     }
 
-    // If the cached result is still fresh, show it immediately.
     if (isAvailabilityFresh(tmdbId)) {
       toggleExpanded(tmdbId, true);
       return;
     }
 
     await refreshWatchProviders(film);
+  }
+
+  async function toggleAvailabilityAlert(film) {
+    if (!film?.id || !session?.user) {
+      alert("Sign in to create availability alerts.");
+      return;
+    }
+
+    const key = String(film.id);
+    const active = alertFilmIds.has(key);
+
+    setAlertSavingFilmIds((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+
+    try {
+      if (active) {
+        const { error } = await supabase
+          .from("v2_availability_alerts")
+          .delete()
+          .eq("user_id", session.user.id)
+          .eq("film_id", film.id);
+
+        if (error) throw error;
+
+        setAlertFilmIds((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      } else {
+        const { error } = await supabase
+          .from("v2_availability_alerts")
+          .upsert(
+            {
+              user_id: session.user.id,
+              film_id: film.id,
+              active: true,
+              last_notified_at: null,
+            },
+            {
+              onConflict: "user_id,film_id",
+            }
+          );
+
+        if (error) throw error;
+
+        setAlertFilmIds((prev) => {
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+      }
+    } catch (alertError) {
+      console.error(alertError);
+      alert(
+        "Couldn't update the availability alert: " +
+          alertError.message
+      );
+    } finally {
+      setAlertSavingFilmIds((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
   }
 
   async function addToWatchlist(film) {
@@ -458,9 +597,7 @@ export default function Catalogue({
       return;
     }
 
-    if (onWatchlistAdded) {
-      onWatchlistAdded(film.tmdb_id);
-    }
+    onWatchlistAdded?.(film.tmdb_id);
   }
 
   async function addToFavourites(film) {
@@ -491,24 +628,25 @@ export default function Catalogue({
       return;
     }
 
-    if (onFavouriteAdded) {
-      onFavouriteAdded(film.tmdb_id);
-    }
+    onFavouriteAdded?.(film.tmdb_id);
+  }
+
+  function getAllProviders(film) {
+    const providerData = watchProviders[film.tmdb_id];
+
+    if (!providerData) return [];
+
+    return uniqueProviders([
+      ...(providerData.flatrate || []),
+      ...(providerData.free || []),
+      ...(providerData.ads || []),
+    ]);
   }
 
   function filmMatchesPlatform(film, selectedPlatform) {
     if (!selectedPlatform) return true;
 
-    const providerData = watchProviders[film.tmdb_id];
-    if (!providerData) return false;
-
-    const providers = [
-      ...(providerData.flatrate || []),
-      ...(providerData.free || []),
-      ...(providerData.ads || []),
-    ];
-
-    return providers.some(
+    return getAllProviders(film).some(
       (provider) =>
         normaliseProviderName(provider.provider_name) === selectedPlatform
     );
@@ -532,62 +670,746 @@ export default function Catalogue({
   });
 
   return (
-    <div
-      style={{
-        marginBottom: 22,
-        padding: 14,
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        background: "#fff",
-      }}
-    >
-      <h2 style={{ margin: "0 0 6px" }}>Discover</h2>
+    <div className="cit-catalogue">
+      <style>{`
+        .cit-catalogue {
+          margin-bottom: 28px;
+        }
 
-      <div
-        style={{
-          fontSize: 13,
-          color: "#666",
-          marginBottom: 14,
-        }}
-      >
-        {loading
-          ? "Loading Christmas catalogue…"
-          : error
-          ? "Couldn't load Christmas catalogue"
-          : `${filteredFilms.length} of ${films.length} Christmas films`}
-      </div>
+        .cit-catalogue-toolbar {
+          display: grid;
+          grid-template-columns: minmax(220px, 1fr) auto;
+          gap: 10px;
+          align-items: center;
+          margin-bottom: 12px;
+        }
 
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          marginBottom: 14,
-        }}
-      >
+        .cit-catalogue-search {
+          width: 100%;
+          min-width: 0;
+          border: 1px solid #d8d3ca;
+          background: rgba(255, 255, 255, 0.9);
+          color: #18382f;
+          padding: 12px 14px;
+          border-radius: 11px;
+          outline: none;
+          box-sizing: border-box;
+          box-shadow: 0 1px 2px rgba(28, 42, 35, 0.03);
+        }
+
+        .cit-catalogue-search:focus {
+          border-color: #6e8e82;
+          box-shadow: 0 0 0 3px rgba(18, 59, 45, 0.08);
+        }
+
+        .cit-decade-select {
+          border: 1px solid #d8d3ca;
+          background: #fff;
+          color: #28483e;
+          padding: 11px 12px;
+          border-radius: 10px;
+          cursor: pointer;
+        }
+
+        .cit-platform-filters {
+          display: flex;
+          gap: 7px;
+          overflow-x: auto;
+          padding: 1px 1px 8px;
+          margin-bottom: 5px;
+          scrollbar-width: none;
+        }
+
+        .cit-platform-filters::-webkit-scrollbar {
+          display: none;
+        }
+
+        .cit-filter-chip {
+          flex: 0 0 auto;
+          border: 1px solid #d8d3ca;
+          background: rgba(255,255,255,.72);
+          color: #40574f;
+          border-radius: 999px;
+          padding: 7px 11px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 650;
+        }
+
+        .cit-filter-chip:hover {
+          border-color: #9badA5;
+          color: #123b2d;
+        }
+
+        .cit-filter-chip--active {
+          border-color: #123b2d;
+          background: #123b2d;
+          color: #fff;
+        }
+
+        .cit-filter-chip--active:hover {
+          color: #fff;
+        }
+
+        .cit-catalogue-meta {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          min-height: 24px;
+          margin-bottom: 12px;
+          color: #68756f;
+          font-size: 12px;
+        }
+
+        .cit-clear-link {
+          border: 0;
+          background: transparent;
+          color: #8d2525;
+          padding: 0;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .cit-film-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .cit-film-card {
+          min-width: 0;
+          overflow: hidden;
+          border: 1px solid #e2ddd4;
+          border-radius: 14px;
+          background: rgba(255,255,255,.9);
+          box-shadow: 0 3px 12px rgba(32, 43, 37, 0.045);
+          transition:
+            transform .16s ease,
+            box-shadow .16s ease,
+            border-color .16s ease;
+        }
+
+        .cit-film-card:hover {
+          transform: translateY(-2px);
+          border-color: #d1cbbf;
+          box-shadow: 0 9px 22px rgba(32, 43, 37, 0.08);
+        }
+
+        .cit-poster-wrap {
+          position: relative;
+          aspect-ratio: 2 / 3;
+          overflow: hidden;
+          background: #eae6df;
+        }
+
+        .cit-poster {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .cit-poster-placeholder {
+          width: 100%;
+          height: 100%;
+          display: grid;
+          place-items: center;
+          color: #7b837f;
+          font-size: 12px;
+        }
+
+        .cit-heart {
+          position: absolute;
+          top: 9px;
+          right: 9px;
+          width: 34px;
+          height: 34px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.78);
+          background: rgba(255,255,255,.92);
+          color: #8f2730;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          font-size: 18px;
+          box-shadow: 0 3px 10px rgba(0,0,0,.12);
+          backdrop-filter: blur(8px);
+        }
+
+        .cit-heart[disabled] {
+          cursor: default;
+          background: rgba(255,244,245,.94);
+        }
+
+        .cit-card-body {
+          padding: 11px 11px 12px;
+        }
+
+        .cit-card-title {
+          color: #18382f;
+          font-size: 15px;
+          font-weight: 780;
+          line-height: 1.25;
+          min-height: 38px;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          overflow: hidden;
+        }
+
+        .cit-card-meta {
+          margin-top: 4px;
+          color: #7b837f;
+          font-size: 11px;
+          min-height: 16px;
+        }
+
+        .cit-provider-summary {
+          min-height: 34px;
+          margin-top: 9px;
+        }
+
+        .cit-provider-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+        }
+
+        .cit-provider-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          min-width: 0;
+          border: 1px solid #e0ddd6;
+          background: #fff;
+          color: #405149;
+          border-radius: 999px;
+          padding: 4px 7px;
+          font-size: 10px;
+          line-height: 1;
+        }
+
+        .cit-provider-badge img {
+          width: 17px;
+          height: 17px;
+          border-radius: 4px;
+          object-fit: cover;
+          flex: 0 0 auto;
+        }
+
+        .cit-provider-badge span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .cit-not-streaming {
+          color: #868d89;
+          font-size: 11px;
+          line-height: 1.35;
+        }
+
+        .cit-card-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 7px;
+          margin-top: 11px;
+        }
+
+        .cit-my-list {
+          width: 100%;
+          border: 1px solid #123b2d;
+          background: #123b2d;
+          color: white;
+          border-radius: 9px;
+          padding: 8px 9px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 750;
+        }
+
+        .cit-my-list:hover {
+          background: #0d3024;
+        }
+
+        .cit-my-list--added {
+          border-color: #c9d8d0;
+          background: #edf5f1;
+          color: #295342;
+          cursor: default;
+        }
+
+        .cit-watch-button {
+          border: 0;
+          background: transparent;
+          color: #53665e;
+          padding: 3px 0 0;
+          cursor: pointer;
+          font-size: 11px;
+          text-align: left;
+          font-weight: 650;
+        }
+
+        .cit-watch-button:hover {
+          color: #123b2d;
+          text-decoration: underline;
+        }
+
+        .cit-availability {
+          margin-top: 10px;
+          padding: 9px;
+          border: 1px solid #e2ded6;
+          border-radius: 10px;
+          background: #f8f6f2;
+        }
+
+        .cit-availability-heading {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 7px;
+          font-size: 11px;
+          font-weight: 800;
+          color: #28483e;
+        }
+
+        .cit-refresh-link {
+          border: 0;
+          background: transparent;
+          padding: 0;
+          color: #65766f;
+          cursor: pointer;
+          font-size: 10px;
+        }
+
+        .cit-provider-section + .cit-provider-section {
+          margin-top: 8px;
+        }
+
+        .cit-provider-label {
+          margin-bottom: 5px;
+          color: #7d8581;
+          font-size: 10px;
+        }
+
+        .cit-provider-badge--compact {
+          max-width: 100%;
+        }
+
+        .cit-watch-link {
+          display: inline-block;
+          margin-top: 8px;
+          color: #244f40;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .cit-checked {
+          margin-top: 6px;
+          color: #929793;
+          font-size: 9px;
+        }
+
+        .cit-status-message {
+          padding: 20px 0;
+          color: #6f7974;
+          font-size: 13px;
+        }
+
+        .cit-film-card {
+          cursor: pointer;
+        }
+
+        .cit-film-card:focus-visible {
+          outline: 3px solid rgba(18, 59, 45, 0.18);
+          outline-offset: 3px;
+        }
+
+        .cit-detail-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 2000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 22px;
+          background: rgba(22, 30, 26, 0.54);
+          backdrop-filter: blur(6px);
+        }
+
+        .cit-detail-modal {
+          position: relative;
+          width: min(920px, 100%);
+          max-height: min(88vh, 860px);
+          overflow: auto;
+          border: 1px solid #ddd8cf;
+          border-radius: 18px;
+          background: #fbfaf7;
+          box-shadow: 0 24px 70px rgba(14, 23, 19, 0.28);
+        }
+
+        .cit-detail-hero {
+          position: relative;
+          min-height: 170px;
+          overflow: hidden;
+          border-radius: 18px 18px 0 0;
+          background: #e8e4dd;
+        }
+
+        .cit-detail-backdrop {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .cit-detail-shade {
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(
+              90deg,
+              rgba(20, 31, 26, 0.78) 0%,
+              rgba(20, 31, 26, 0.48) 48%,
+              rgba(20, 31, 26, 0.22) 100%
+            );
+        }
+
+        .cit-detail-heading {
+          position: relative;
+          z-index: 1;
+          max-width: 600px;
+          padding: 42px 58px 34px 34px;
+          color: #fff;
+        }
+
+        .cit-detail-heading h2 {
+          margin: 0;
+          font-size: clamp(28px, 4vw, 42px);
+          line-height: 1.04;
+          letter-spacing: -0.04em;
+        }
+
+        .cit-detail-heading-meta {
+          margin-top: 8px;
+          color: rgba(255,255,255,.82);
+          font-size: 13px;
+        }
+
+        .cit-detail-close {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          z-index: 3;
+          width: 38px;
+          height: 38px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(255,255,255,.72);
+          border-radius: 999px;
+          background: rgba(255,255,255,.92);
+          color: #173a2e;
+          cursor: pointer;
+          font-size: 18px;
+          box-shadow: 0 4px 14px rgba(0,0,0,.12);
+        }
+
+        .cit-detail-content {
+          display: grid;
+          grid-template-columns: 210px minmax(0, 1fr);
+          gap: 24px;
+          padding: 24px;
+        }
+
+        .cit-detail-poster {
+          width: 100%;
+          aspect-ratio: 2 / 3;
+          object-fit: cover;
+          border-radius: 12px;
+          background: #eae6df;
+          box-shadow: 0 8px 20px rgba(31, 39, 35, 0.11);
+        }
+
+        .cit-detail-copy {
+          min-width: 0;
+        }
+
+        .cit-detail-overview {
+          margin: 0;
+          color: #44554e;
+          font-size: 14px;
+          line-height: 1.65;
+        }
+
+        .cit-detail-metadata {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px 12px;
+          margin: 0 0 14px;
+          color: #77827d;
+          font-size: 11px;
+        }
+
+        .cit-detail-metadata span + span::before {
+          content: "·";
+          margin-right: 12px;
+          color: #b0b5b2;
+        }
+
+        .cit-detail-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 18px;
+        }
+
+        .cit-detail-primary,
+        .cit-detail-secondary {
+          border-radius: 9px;
+          padding: 9px 12px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 750;
+        }
+
+        .cit-detail-primary {
+          border: 1px solid #123b2d;
+          background: #123b2d;
+          color: #fff;
+        }
+
+        .cit-detail-primary[disabled] {
+          border-color: #c9d8d0;
+          background: #edf5f1;
+          color: #295342;
+          cursor: default;
+        }
+
+        .cit-detail-secondary {
+          border: 1px solid #d8d3ca;
+          background: #fff;
+          color: #40574f;
+        }
+
+        .cit-detail-secondary[disabled] {
+          background: #fff4f5;
+          color: #8f2730;
+          cursor: default;
+        }
+
+        .cit-detail-watch {
+          margin-top: 24px;
+          padding-top: 20px;
+          border-top: 1px solid #e5e0d8;
+        }
+
+        .cit-detail-watch h3 {
+          margin: 0 0 10px;
+          color: #18382f;
+          font-size: 15px;
+        }
+
+        .cit-detail-watch-grid {
+          display: grid;
+          gap: 12px;
+        }
+
+        .cit-detail-provider-group {
+          padding: 10px 11px;
+          border: 1px solid #e1ddd5;
+          border-radius: 10px;
+          background: rgba(255,255,255,.7);
+        }
+
+        .cit-detail-provider-label {
+          margin-bottom: 7px;
+          color: #7b847f;
+          font-size: 10px;
+          font-weight: 750;
+          text-transform: uppercase;
+          letter-spacing: .05em;
+        }
+
+        .cit-detail-no-streaming {
+          color: #6f7974;
+          font-size: 13px;
+          line-height: 1.45;
+        }
+
+        .cit-detail-alert-button {
+          margin-top: 10px;
+          border: 1px solid #a9cdb7;
+          background: #f4fbf6;
+          color: #23513b;
+          padding: 8px 10px;
+          border-radius: 9px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 750;
+        }
+
+        .cit-detail-alert-button--active {
+          border-color: #83bd98;
+          background: #eaf7ee;
+        }
+
+        .cit-detail-alert-button[disabled] {
+          cursor: wait;
+          opacity: .7;
+        }
+
+        .cit-detail-footer-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 12px;
+          flex-wrap: wrap;
+          color: #969c98;
+          font-size: 10px;
+        }
+
+        .cit-detail-refresh {
+          border: 0;
+          background: transparent;
+          color: #6f7e77;
+          padding: 0;
+          cursor: pointer;
+          font-size: 10px;
+          font-weight: 650;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+
+        .cit-detail-checked {
+          color: #969c98;
+          font-size: 10px;
+        }
+
+        @media (max-width: 1050px) {
+          .cit-film-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 720px) {
+          .cit-catalogue-toolbar {
+            grid-template-columns: 1fr;
+          }
+
+          .cit-decade-select {
+            width: 100%;
+          }
+
+          .cit-film-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+          }
+
+          .cit-film-card {
+            border-radius: 12px;
+          }
+
+          .cit-card-body {
+            padding: 9px 9px 10px;
+          }
+
+          .cit-card-title {
+            min-height: 36px;
+            font-size: 13px;
+          }
+
+          .cit-provider-summary {
+            min-height: 28px;
+          }
+
+          .cit-provider-badge {
+            max-width: 100%;
+            font-size: 9px;
+            padding: 3px 6px;
+          }
+
+          .cit-provider-badge img {
+            width: 15px;
+            height: 15px;
+          }
+
+          .cit-my-list {
+            font-size: 11px;
+            padding: 7px;
+          }
+
+          .cit-heart {
+            width: 32px;
+            height: 32px;
+          }
+
+          .cit-detail-overlay {
+            align-items: flex-end;
+            padding: 0;
+          }
+
+          .cit-detail-modal {
+            width: 100%;
+            max-height: 92vh;
+            border-radius: 18px 18px 0 0;
+            border-bottom: 0;
+          }
+
+          .cit-detail-hero {
+            min-height: 145px;
+            border-radius: 18px 18px 0 0;
+          }
+
+          .cit-detail-heading {
+            padding: 46px 54px 24px 18px;
+          }
+
+          .cit-detail-content {
+            grid-template-columns: 92px minmax(0, 1fr);
+            gap: 14px;
+            padding: 16px;
+          }
+
+          .cit-detail-overview {
+            font-size: 12px;
+            line-height: 1.55;
+          }
+
+          .cit-detail-actions {
+            grid-column: 1 / -1;
+          }
+
+          .cit-detail-watch {
+            grid-column: 1 / -1;
+            margin-top: 8px;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .cit-film-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      <div className="cit-catalogue-toolbar">
         <input
-          type="text"
-          placeholder="Search Christmas films..."
+          className="cit-catalogue-search"
+          type="search"
+          placeholder="Search Christmas films…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            flex: "1 1 220px",
-            minWidth: 0,
-            padding: "8px 10px",
-            border: "1px solid #d1d5db",
-            borderRadius: 8,
-          }}
         />
 
         <select
+          className="cit-decade-select"
           value={decade}
           onChange={(e) => setDecade(e.target.value)}
-          style={{
-            padding: "8px 10px",
-            border: "1px solid #d1d5db",
-            borderRadius: 8,
-            background: "#fff",
-          }}
+          aria-label="Filter by decade"
         >
           <option value="">All decades</option>
           <option value="2020">2020s</option>
@@ -602,71 +1424,59 @@ export default function Catalogue({
           <option value="1930">1930s</option>
           <option value="1920">1920s</option>
         </select>
+      </div>
 
-        <select
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
-          style={{
-            padding: "8px 10px",
-            border: "1px solid #d1d5db",
-            borderRadius: 8,
-            background: "#fff",
-          }}
-        >
-          <option value="">All platforms</option>
-          <option value="Netflix">Netflix</option>
-          <option value="Disney+">Disney+</option>
-          <option value="Prime Video">Prime Video</option>
-          <option value="Apple TV+">Apple TV+</option>
-          <option value="Paramount+">Paramount+</option>
-          <option value="NOW">NOW</option>
-          <option value="Sky Go">Sky Go</option>
-          <option value="BBC iPlayer">BBC iPlayer</option>
-          <option value="ITVX">ITVX</option>
-          <option value="Channel 4">Channel 4</option>
-        </select>
+      <div className="cit-platform-filters">
+        {PLATFORM_FILTERS.map((provider) => {
+          const label = provider || "All";
+
+          return (
+            <button
+              key={label}
+              type="button"
+              className={`cit-filter-chip ${
+                platform === provider ? "cit-filter-chip--active" : ""
+              }`}
+              onClick={() => setPlatform(provider)}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="cit-catalogue-meta">
+        <span>
+          {loading
+            ? "Loading catalogue…"
+            : error
+            ? "Couldn't load catalogue"
+            : `${filteredFilms.length} of ${films.length} films`}
+        </span>
 
         {(search || decade || platform) && (
           <button
+            type="button"
+            className="cit-clear-link"
             onClick={() => {
               setSearch("");
               setDecade("");
               setPlatform("");
             }}
-            style={{
-              padding: "8px 10px",
-              border: "1px solid #d1d5db",
-              borderRadius: 8,
-              background: "#fff",
-              cursor: "pointer",
-            }}
           >
-            Clear
+            Clear filters
           </button>
         )}
       </div>
 
-      {platform && (
-        <div
-          style={{
-            marginTop: -4,
-            marginBottom: 12,
-            fontSize: 11,
-            color: "#777",
-          }}
-        >
-          Platform results use UK availability already checked and cached so far.
-        </div>
-      )}
-
       {error && (
-        <div style={{ color: "#b91c1c", marginBottom: 12 }}>
+        <div className="cit-status-message">
           Couldn't load catalogue: {error}
         </div>
       )}
 
       {!loading && !error && films.length === 0 && (
-        <div style={{ color: "#666" }}>
+        <div className="cit-status-message">
           The Christmas catalogue is empty at the moment.
         </div>
       )}
@@ -675,20 +1485,13 @@ export default function Catalogue({
         !error &&
         films.length > 0 &&
         filteredFilms.length === 0 && (
-          <div style={{ color: "#666" }}>
-            No Christmas films match those filters.
+          <div className="cit-status-message">
+            No films match those filters.
           </div>
         )}
 
       {!loading && !error && filteredFilms.length > 0 && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: 12,
-          }}
-        >
+        <div className="cit-film-grid">
           {filteredFilms.map((film) => {
             const providerData = watchProviders[film.tmdb_id];
             const isLoadingProviders = loadingProviders.has(film.tmdb_id);
@@ -705,269 +1508,188 @@ export default function Catalogue({
               providerData?.ads || []
             );
 
-            const hasStreaming =
-              subscriptionProviders.length > 0 ||
-              freeProviders.length > 0 ||
-              adProviders.length > 0;
+            const allProviders = uniqueProviders([
+              ...subscriptionProviders,
+              ...freeProviders,
+              ...adProviders,
+            ]);
+
+            const hasStreaming = allProviders.length > 0;
+            const alreadyAdded = watchlistTmdbIds?.has(film.tmdb_id);
+            const isFavourite = favouriteTmdbIds?.has(film.tmdb_id);
 
             return (
-              <div
+              <article
                 key={film.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "90px 1fr",
-                  gap: 12,
-                  alignItems: "start",
-                  border: "1px solid #eee",
-                  borderRadius: 12,
-                  padding: 10,
+                className="cit-film-card"
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  if (event.target.closest("button, a")) return;
+                  setSelectedFilm(film);
                 }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedFilm(film);
+                  }
+                }}
+                aria-label={`View details for ${film.title}`}
               >
-                {film.poster_path ? (
-                  <img
-                    src={`${TMDB_IMG}/w185${film.poster_path}`}
-                    alt={film.title}
-                    loading="lazy"
-                    style={{
-                      width: 90,
-                      height: 135,
-                      objectFit: "cover",
-                      borderRadius: 8,
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: 90,
-                      height: 135,
-                      background: "#f3f4f6",
-                      borderRadius: 8,
-                    }}
-                  />
-                )}
-
-                <div style={{ minWidth: 0 }}>
-                  <strong>
-                    {film.title}
-                    {film.release_year
-                      ? ` (${film.release_year})`
-                      : ""}
-                  </strong>
-
-                  {film.overview && (
-                    <div
-                      style={{
-                        marginTop: 6,
-                        fontSize: 13,
-                        color: "#444",
-                        lineHeight: 1.35,
-                      }}
-                    >
-                      {film.overview.length > 180
-                        ? film.overview.slice(0, 180) + "…"
-                        : film.overview}
+                <div className="cit-poster-wrap">
+                  {film.poster_path ? (
+                    <img
+                      className="cit-poster"
+                      src={`${TMDB_IMG}/w342${film.poster_path}`}
+                      alt={film.title}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="cit-poster-placeholder">
+                      No poster
                     </div>
                   )}
 
-                  <div
-                    style={{
-                      marginTop: 10,
-                      display: "flex",
-                      gap: 8,
-                      flexWrap: "wrap",
+                  <button
+                    type="button"
+                    className="cit-heart"
+                    onClick={() => {
+                      if (!isFavourite) addToFavourites(film);
                     }}
+                    disabled={isFavourite}
+                    aria-label={
+                      isFavourite
+                        ? `${film.title} is in favourites`
+                        : `Add ${film.title} to favourites`
+                    }
+                    title={
+                      isFavourite
+                        ? "Favourite"
+                        : "Add to favourites"
+                    }
                   >
-                    {watchlistTmdbIds?.has(film.tmdb_id) ? (
-                      <button
-                        disabled
-                        style={{
-                          border: "1px solid #bbf7d0",
-                          background: "#f0fdf4",
-                          padding: "6px 9px",
-                          borderRadius: 8,
-                        }}
-                      >
-                        Added ✓
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => addToWatchlist(film)}
-                        style={{
-                          border: "1px solid #d1d5db",
-                          background: "#fff",
-                          padding: "6px 9px",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Add to My Christmas List
-                      </button>
-                    )}
+                    {isFavourite ? "♥" : "♡"}
+                  </button>
+                </div>
 
-                    {favouriteTmdbIds?.has(film.tmdb_id) ? (
+                <div className="cit-card-body">
+                  <div className="cit-card-title">{film.title}</div>
+
+                  <div className="cit-card-meta">
+                    {film.release_year || "Year unknown"}
+                    {film.classification === "christmas-adjacent"
+                      ? " · Christmas adjacent"
+                      : ""}
+                  </div>
+
+                  <div className="cit-provider-summary">
+                    {hasStreaming ? (
+                      <ProviderBadges
+                        providers={allProviders}
+                        max={2}
+                        compact
+                      />
+                    ) : (
+                      <div className="cit-not-streaming">
+                        Not currently included with a UK streaming service
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="cit-card-actions">
+                    {alreadyAdded ? (
                       <button
+                        type="button"
+                        className="cit-my-list cit-my-list--added"
                         disabled
-                        style={{
-                          border: "1px solid #fecdd3",
-                          background: "#fff1f2",
-                          padding: "6px 9px",
-                          borderRadius: 8,
-                        }}
                       >
-                        ♥ Favourite
+                        ✓ In My List
                       </button>
                     ) : (
                       <button
-                        onClick={() => addToFavourites(film)}
-                        style={{
-                          border: "1px solid #fecdd3",
-                          background: "#fff",
-                          padding: "6px 9px",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                        }}
+                        type="button"
+                        className="cit-my-list"
+                        onClick={() => addToWatchlist(film)}
                       >
-                        ♡ Favourite
+                        + My List
                       </button>
                     )}
 
                     <button
+                      type="button"
+                      className="cit-watch-button"
                       onClick={() => handleWhereToWatch(film)}
                       disabled={isLoadingProviders || !TMDB_KEY}
-                      style={{
-                        border: "1px solid #bfdbfe",
-                        background: "#eff6ff",
-                        padding: "6px 9px",
-                        borderRadius: 8,
-                        cursor:
-                          isLoadingProviders || !TMDB_KEY
-                            ? "not-allowed"
-                            : "pointer",
-                      }}
                     >
                       {isLoadingProviders
                         ? "Checking UK availability…"
                         : isExpanded
-                        ? "Hide where to watch"
-                        : "📺 Where to watch"}
+                        ? "Hide availability"
+                        : "Where to watch"}
                     </button>
                   </div>
 
                   {isExpanded && (
-                    <div
-                      style={{
-                        marginTop: 10,
-                        padding: 9,
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 8,
-                        background: "#fafafa",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                          }}
-                        >
-                          Where to watch in the UK
-                        </div>
+                    <div className="cit-availability">
+                      <div className="cit-availability-heading">
+                        <span>UK availability</span>
 
                         <button
+                          type="button"
+                          className="cit-refresh-link"
                           onClick={() => refreshWatchProviders(film)}
                           disabled={isLoadingProviders}
-                          style={{
-                            border: 0,
-                            background: "transparent",
-                            padding: 0,
-                            color: "#1d4ed8",
-                            fontSize: 11,
-                            cursor: isLoadingProviders
-                              ? "not-allowed"
-                              : "pointer",
-                          }}
                         >
                           Refresh
                         </button>
                       </div>
 
-                      {providerError && (
-                        <div
-                          style={{
-                            marginTop: 6,
-                            fontSize: 11,
-                            color: "#b91c1c",
-                          }}
-                        >
+                      {providerError ? (
+                        <div className="cit-not-streaming">
                           {providerError}
                         </div>
-                      )}
-
-                      {!providerError && !hasStreaming ? (
-                        <div
-                          style={{
-                            marginTop: 6,
-                            fontSize: 12,
-                            color: "#666",
-                          }}
-                        >
-                          No UK subscription, free or ad-supported streaming
+                      ) : !hasStreaming ? (
+                        <div className="cit-not-streaming">
+                          No subscription, free or ad-supported UK streaming
                           option was found.
                         </div>
                       ) : (
                         <>
                           {subscriptionProviders.length > 0 && (
-                            <div style={{ marginTop: 7 }}>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: "#666",
-                                }}
-                              >
+                            <div className="cit-provider-section">
+                              <div className="cit-provider-label">
                                 Subscription
                               </div>
-                              <ProviderChips
+                              <ProviderBadges
                                 providers={subscriptionProviders}
+                                max={10}
+                                compact
                               />
                             </div>
                           )}
 
                           {freeProviders.length > 0 && (
-                            <div style={{ marginTop: 7 }}>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: "#666",
-                                }}
-                              >
+                            <div className="cit-provider-section">
+                              <div className="cit-provider-label">
                                 Free
                               </div>
-                              <ProviderChips
+                              <ProviderBadges
                                 providers={freeProviders}
+                                max={10}
+                                compact
                               />
                             </div>
                           )}
 
                           {adProviders.length > 0 && (
-                            <div style={{ marginTop: 7 }}>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: "#666",
-                                }}
-                              >
+                            <div className="cit-provider-section">
+                              <div className="cit-provider-label">
                                 Free with ads
                               </div>
-                              <ProviderChips
+                              <ProviderBadges
                                 providers={adProviders}
+                                max={10}
+                                compact
                               />
                             </div>
                           )}
@@ -975,52 +1697,270 @@ export default function Catalogue({
                       )}
 
                       {!providerError && providerData?.link && (
-                        <div style={{ marginTop: 8 }}>
-                          <a
-                            href={providerData.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              fontSize: 12,
-                              color: "#1d4ed8",
-                            }}
-                          >
-                            View watch options
-                          </a>
-                        </div>
+                        <a
+                          className="cit-watch-link"
+                          href={providerData.link}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View watch options
+                        </a>
                       )}
 
-                      {!providerError && (
-                        <div
-                          style={{
-                            marginTop: 7,
-                            fontSize: 10,
-                            color: "#888",
-                          }}
-                        >
-                          Availability data powered by JustWatch.
+                      {availabilityCheckedAt[film.tmdb_id] && (
+                        <div className="cit-checked">
+                          {formatCheckedAt(
+                            availabilityCheckedAt[film.tmdb_id]
+                          )}{" "}
+                          · Availability data powered by JustWatch
                         </div>
                       )}
                     </div>
                   )}
-
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 11,
-                      color: "#777",
-                    }}
-                  >
-                    {film.classification === "christmas-adjacent"
-                      ? "Christmas adjacent"
-                      : "Christmas"}
-                  </div>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
       )}
+
+      {selectedFilm && (() => {
+        const providerData = watchProviders[selectedFilm.tmdb_id];
+
+        const subscriptionProviders = uniqueProviders(
+          providerData?.flatrate || []
+        );
+        const freeProviders = uniqueProviders(providerData?.free || []);
+        const adProviders = uniqueProviders(providerData?.ads || []);
+
+        const allProviders = uniqueProviders([
+          ...subscriptionProviders,
+          ...freeProviders,
+          ...adProviders,
+        ]);
+
+        const hasStreaming = allProviders.length > 0;
+        const alreadyAdded = watchlistTmdbIds?.has(selectedFilm.tmdb_id);
+        const isFavourite = favouriteTmdbIds?.has(selectedFilm.tmdb_id);
+        const isRefreshing = loadingProviders.has(selectedFilm.tmdb_id);
+        const alertKey = String(selectedFilm.id || "");
+        const alertActive = alertFilmIds.has(alertKey);
+        const alertSaving = alertSavingFilmIds.has(alertKey);
+
+        return (
+          <div
+            className="cit-detail-overlay"
+            onClick={() => setSelectedFilm(null)}
+          >
+            <div
+              className="cit-detail-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cit-film-detail-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="cit-detail-hero">
+                {selectedFilm.backdrop_path ? (
+                  <img
+                    className="cit-detail-backdrop"
+                    src={`${TMDB_IMG}/w1280${selectedFilm.backdrop_path}`}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                ) : null}
+
+                <div className="cit-detail-shade" />
+
+                <button
+                  type="button"
+                  className="cit-detail-close"
+                  onClick={() => setSelectedFilm(null)}
+                  aria-label="Close film details"
+                >
+                  ×
+                </button>
+
+                <div className="cit-detail-heading">
+                  <h2 id="cit-film-detail-title">
+                    {selectedFilm.title}
+                  </h2>
+
+                  <div className="cit-detail-heading-meta">
+                    {selectedFilm.release_year || "Year unknown"}
+                    {selectedFilm.classification === "christmas-adjacent"
+                      ? " · Christmas adjacent"
+                      : ""}
+                  </div>
+                </div>
+              </div>
+
+              <div className="cit-detail-content">
+                <div>
+                  {selectedFilm.poster_path ? (
+                    <img
+                      className="cit-detail-poster"
+                      src={`${TMDB_IMG}/w342${selectedFilm.poster_path}`}
+                      alt={selectedFilm.title}
+                    />
+                  ) : (
+                    <div className="cit-detail-poster" />
+                  )}
+                </div>
+
+                <div className="cit-detail-copy">
+                  <div className="cit-detail-metadata">
+                    {selectedFilm.release_year && (
+                      <span>{selectedFilm.release_year}</span>
+                    )}
+                  </div>
+
+                  <p className="cit-detail-overview">
+                    {selectedFilm.overview ||
+                      "No synopsis is available for this film yet."}
+                  </p>
+
+                  <div className="cit-detail-actions">
+                    <button
+                      type="button"
+                      className="cit-detail-primary"
+                      onClick={() => addToWatchlist(selectedFilm)}
+                      disabled={alreadyAdded}
+                    >
+                      {alreadyAdded
+                        ? "✓ In My Christmas List"
+                        : "+ My Christmas List"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="cit-detail-secondary"
+                      onClick={() => {
+                        if (!isFavourite) {
+                          addToFavourites(selectedFilm);
+                        }
+                      }}
+                      disabled={isFavourite}
+                    >
+                      {isFavourite
+                        ? "♥ Favourite"
+                        : "♡ Add to Favourites"}
+                    </button>
+                  </div>
+
+                  <div className="cit-detail-watch">
+                    <h3>Where to watch in the UK</h3>
+
+                    {providerErrors[selectedFilm.tmdb_id] ? (
+                      <div className="cit-detail-no-streaming">
+                        {providerErrors[selectedFilm.tmdb_id]}
+                      </div>
+                    ) : !hasStreaming ? (
+                      <div>
+                        <div className="cit-detail-no-streaming">
+                          Not currently included with a UK subscription, free or
+                          ad-supported streaming service.
+                        </div>
+
+                        {session?.user && (
+                          <button
+                            type="button"
+                            className={`cit-detail-alert-button ${
+                              alertActive
+                                ? "cit-detail-alert-button--active"
+                                : ""
+                            }`}
+                            onClick={() =>
+                              toggleAvailabilityAlert(selectedFilm)
+                            }
+                            disabled={alertSaving}
+                          >
+                            {alertSaving
+                              ? "Saving…"
+                              : alertActive
+                              ? "🔔 Watching for availability"
+                              : "🔔 Tell me when available"}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="cit-detail-watch-grid">
+                        {subscriptionProviders.length > 0 && (
+                          <div className="cit-detail-provider-group">
+                            <div className="cit-detail-provider-label">
+                              Subscription
+                            </div>
+                            <ProviderBadges
+                              providers={subscriptionProviders}
+                              max={12}
+                            />
+                          </div>
+                        )}
+
+                        {freeProviders.length > 0 && (
+                          <div className="cit-detail-provider-group">
+                            <div className="cit-detail-provider-label">
+                              Free
+                            </div>
+                            <ProviderBadges
+                              providers={freeProviders}
+                              max={12}
+                            />
+                          </div>
+                        )}
+
+                        {adProviders.length > 0 && (
+                          <div className="cit-detail-provider-group">
+                            <div className="cit-detail-provider-label">
+                              Free with ads
+                            </div>
+                            <ProviderBadges
+                              providers={adProviders}
+                              max={12}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {providerData?.link && (
+                      <a
+                        className="cit-watch-link"
+                        href={providerData.link}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View watch options
+                      </a>
+                    )}
+
+                    <div className="cit-detail-footer-row">
+                      {availabilityCheckedAt[selectedFilm.tmdb_id] && (
+                        <span className="cit-detail-checked">
+                          {formatCheckedAt(
+                            availabilityCheckedAt[selectedFilm.tmdb_id]
+                          )}{" "}
+                          · JustWatch
+                        </span>
+                      )}
+
+                      <span>·</span>
+
+                      <button
+                        type="button"
+                        className="cit-detail-refresh"
+                        onClick={() => refreshWatchProviders(selectedFilm)}
+                        disabled={isRefreshing || !TMDB_KEY}
+                      >
+                        {isRefreshing ? "Refreshing…" : "Refresh"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
