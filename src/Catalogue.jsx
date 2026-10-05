@@ -131,6 +131,8 @@ export default function Catalogue({
   const [selectedFilm, setSelectedFilm] = useState(null);
   const [alertFilmIds, setAlertFilmIds] = useState(new Set());
   const [alertSavingFilmIds, setAlertSavingFilmIds] = useState(new Set());
+  const [watchedByFilmId, setWatchedByFilmId] = useState({});
+  const [savingWatchedFilmIds, setSavingWatchedFilmIds] = useState(new Set());
 
   const [watchProviders, setWatchProviders] = useState({});
   const [availabilityCheckedAt, setAvailabilityCheckedAt] = useState({});
@@ -313,6 +315,48 @@ export default function Catalogue({
     }
 
     loadAvailabilityAlerts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, session]);
+
+  useEffect(() => {
+    if (!supabase || !session?.user) {
+      setWatchedByFilmId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadViewingHistory() {
+      const { data, error } = await supabase
+        .from("v2_viewing_events")
+        .select("film_id, watched_at")
+        .eq("user_id", session.user.id)
+        .order("watched_at", { ascending: false });
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Couldn't load viewing history:", error);
+        return;
+      }
+
+      const latestByFilm = {};
+
+      for (const row of data || []) {
+        const key = String(row.film_id);
+
+        if (!latestByFilm[key]) {
+          latestByFilm[key] = row.watched_at;
+        }
+      }
+
+      setWatchedByFilmId(latestByFilm);
+    }
+
+    loadViewingHistory();
 
     return () => {
       cancelled = true;
@@ -569,6 +613,66 @@ export default function Catalogue({
     }
   }
 
+  function formatWatchedDate(value) {
+    if (!value) return "";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  async function markAsWatched(film) {
+    if (!film?.id || !session?.user) {
+      alert("Sign in to mark films as watched.");
+      return;
+    }
+
+    const key = String(film.id);
+
+    if (watchedByFilmId[key] || savingWatchedFilmIds.has(key)) {
+      return;
+    }
+
+    setSavingWatchedFilmIds((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+
+    try {
+      const { data, error } = await supabase
+        .from("v2_viewing_events")
+        .insert({
+          user_id: session.user.id,
+          film_id: film.id,
+        })
+        .select("watched_at")
+        .single();
+
+      if (error) throw error;
+
+      setWatchedByFilmId((prev) => ({
+        ...prev,
+        [key]: data?.watched_at || new Date().toISOString(),
+      }));
+    } catch (watchedError) {
+      console.error(watchedError);
+      alert("Couldn't mark the film as watched: " + watchedError.message);
+    } finally {
+      setSavingWatchedFilmIds((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }
+
   async function addToWatchlist(film) {
     if (!session?.user) {
       alert("Sign in to save films.");
@@ -818,6 +922,22 @@ export default function Catalogue({
           place-items: center;
           color: #7b837f;
           font-size: 12px;
+        }
+
+        .cit-watched-badge {
+          position: absolute;
+          left: 9px;
+          bottom: 9px;
+          z-index: 2;
+          border: 1px solid rgba(255,255,255,.78);
+          border-radius: 999px;
+          background: rgba(18,59,45,.93);
+          color: #fff;
+          padding: 5px 8px;
+          font-size: 10px;
+          font-weight: 800;
+          box-shadow: 0 3px 10px rgba(0,0,0,.12);
+          backdrop-filter: blur(8px);
         }
 
         .cit-heart {
@@ -1195,6 +1315,28 @@ export default function Catalogue({
           color: #40574f;
         }
 
+        .cit-detail-watched {
+          border: 1px solid #b8d1c4;
+          background: #eef7f2;
+          color: #28513f;
+          border-radius: 9px;
+          padding: 9px 12px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 750;
+        }
+
+        .cit-detail-watched[disabled] {
+          cursor: default;
+          background: #edf5f1;
+        }
+
+        .cit-detail-watched-date {
+          margin-top: 6px;
+          color: #7c8681;
+          font-size: 10px;
+        }
+
         .cit-detail-secondary[disabled] {
           background: #fff4f5;
           color: #8f2730;
@@ -1517,6 +1659,7 @@ export default function Catalogue({
             const hasStreaming = allProviders.length > 0;
             const alreadyAdded = watchlistTmdbIds?.has(film.tmdb_id);
             const isFavourite = favouriteTmdbIds?.has(film.tmdb_id);
+            const watchedAt = watchedByFilmId[String(film.id)] || null;
 
             return (
               <article
@@ -1548,6 +1691,15 @@ export default function Catalogue({
                     <div className="cit-poster-placeholder">
                       No poster
                     </div>
+                  )}
+
+                  {watchedAt && (
+                    <span
+                      className="cit-watched-badge"
+                      title={`Watched ${formatWatchedDate(watchedAt)}`}
+                    >
+                      ✓ Watched
+                    </span>
                   )}
 
                   <button
@@ -1746,6 +1898,9 @@ export default function Catalogue({
         const alertKey = String(selectedFilm.id || "");
         const alertActive = alertFilmIds.has(alertKey);
         const alertSaving = alertSavingFilmIds.has(alertKey);
+        const watchedKey = String(selectedFilm.id || "");
+        const watchedAt = watchedByFilmId[watchedKey] || null;
+        const savingWatched = savingWatchedFilmIds.has(watchedKey);
 
         return (
           <div
@@ -1808,12 +1963,6 @@ export default function Catalogue({
                 </div>
 
                 <div className="cit-detail-copy">
-                  <div className="cit-detail-metadata">
-                    {selectedFilm.release_year && (
-                      <span>{selectedFilm.release_year}</span>
-                    )}
-                  </div>
-
                   <p className="cit-detail-overview">
                     {selectedFilm.overview ||
                       "No synopsis is available for this film yet."}
@@ -1845,6 +1994,27 @@ export default function Catalogue({
                         ? "♥ Favourite"
                         : "♡ Add to Favourites"}
                     </button>
+
+                    <div>
+                      <button
+                        type="button"
+                        className="cit-detail-watched"
+                        onClick={() => markAsWatched(selectedFilm)}
+                        disabled={!!watchedAt || savingWatched}
+                      >
+                        {savingWatched
+                          ? "Saving…"
+                          : watchedAt
+                          ? "✓ Watched"
+                          : "✓ Mark as watched"}
+                      </button>
+
+                      {watchedAt && (
+                        <div className="cit-detail-watched-date">
+                          Watched {formatWatchedDate(watchedAt)}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="cit-detail-watch">

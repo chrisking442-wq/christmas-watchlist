@@ -5,6 +5,7 @@ import AuthPanel from "./AuthPanel";
 import MyLibrary from "./MyLibrary";
 import Catalogue from "./Catalogue";
 import CatalogueAdmin from "./CatalogueAdmin";
+import WatchedHistory from "./WatchedHistory";
 
 /* ========= ENV / CLIENTS ========= */
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -1339,7 +1340,7 @@ const saveFavouriteFilm = async (film) => {
             bottom: 10px;
             z-index: 1200;
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 4px;
             padding: 5px;
             border: 1px solid #ded8cf;
@@ -1506,6 +1507,19 @@ const saveFavouriteFilm = async (film) => {
             >
               Favourites
             </button>
+
+            <button
+              type="button"
+              className={`cit-nav-button ${
+                activeView === "watched" ? "cit-nav-button--primary" : ""
+              }`}
+              onClick={() => {
+                setActiveView("watched");
+                setAccountOpen(false);
+              }}
+            >
+              Watched
+            </button>
           </nav>
 
           {session?.user && (
@@ -1623,6 +1637,14 @@ const saveFavouriteFilm = async (film) => {
             }}
           />
         </section>
+      ) : activeView === "watched" ? (
+        <section className="cit-section-anchor">
+          <WatchedHistory
+            supabase={supabase}
+            session={session}
+            onBrowseDiscover={() => setActiveView("discover")}
+          />
+        </section>
       ) : (
         <section className="cit-section-anchor">
           <MyLibrary
@@ -1691,6 +1713,18 @@ const saveFavouriteFilm = async (film) => {
           onClick={() => setActiveView("favourites")}
         >
           Favourites
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeView === "watched"
+              ? "cit-mobile-nav-button--active"
+              : ""
+          }
+          onClick={() => setActiveView("watched")}
+        >
+          Watched
         </button>
       </nav>
 

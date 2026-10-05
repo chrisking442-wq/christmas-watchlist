@@ -105,6 +105,8 @@ export default function MyLibrary({
   const [alertFilmIds, setAlertFilmIds] = useState(new Set());
   const [triggeredAlerts, setTriggeredAlerts] = useState([]);
   const [alertSavingFilmIds, setAlertSavingFilmIds] = useState(new Set());
+  const [watchedByFilmId, setWatchedByFilmId] = useState({});
+  const [savingWatchedFilmIds, setSavingWatchedFilmIds] = useState(new Set());
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState("");
 
@@ -261,6 +263,48 @@ export default function MyLibrary({
 
   useEffect(() => {
     if (!supabase || !session?.user) {
+      setWatchedByFilmId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadViewingHistory() {
+      const { data, error } = await supabase
+        .from("v2_viewing_events")
+        .select("film_id, watched_at")
+        .eq("user_id", session.user.id)
+        .order("watched_at", { ascending: false });
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Couldn't load viewing history:", error);
+        return;
+      }
+
+      const latestByFilm = {};
+
+      for (const row of data || []) {
+        const key = String(row.film_id);
+
+        if (!latestByFilm[key]) {
+          latestByFilm[key] = row.watched_at;
+        }
+      }
+
+      setWatchedByFilmId(latestByFilm);
+    }
+
+    loadViewingHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, session]);
+
+  useEffect(() => {
+    if (!supabase || !session?.user) {
       setAlertFilmIds(new Set());
       setTriggeredAlerts([]);
       return;
@@ -391,6 +435,67 @@ export default function MyLibrary({
       cancelled = true;
     };
   }, [supabase, session]);
+
+  function formatWatchedDate(value) {
+    if (!value) return "";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  async function markAsWatched(filmId) {
+    if (!filmId || !session?.user) return;
+
+    const key = String(filmId);
+
+    if (watchedByFilmId[key] || savingWatchedFilmIds.has(key)) {
+      return;
+    }
+
+    setSavingWatchedFilmIds((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+
+    setError("");
+
+    try {
+      const { data, error } = await supabase
+        .from("v2_viewing_events")
+        .insert({
+          user_id: session.user.id,
+          film_id: filmId,
+        })
+        .select("watched_at")
+        .single();
+
+      if (error) throw error;
+
+      setWatchedByFilmId((prev) => ({
+        ...prev,
+        [key]: data?.watched_at || new Date().toISOString(),
+      }));
+    } catch (watchedError) {
+      console.error(watchedError);
+      setError(
+        "Couldn't mark the film as watched: " + watchedError.message
+      );
+    } finally {
+      setSavingWatchedFilmIds((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }
 
   async function toggleAvailabilityAlert(filmId) {
     if (!filmId || !session?.user) return;
@@ -641,9 +746,26 @@ export default function MyLibrary({
         }
 
         .cit-library-poster-wrap {
+          position: relative;
           aspect-ratio: 2 / 3;
           overflow: hidden;
           background: #eae6df;
+        }
+
+        .cit-library-watched-badge {
+          position: absolute;
+          left: 9px;
+          bottom: 9px;
+          z-index: 2;
+          border: 1px solid rgba(255,255,255,.78);
+          border-radius: 999px;
+          background: rgba(18,59,45,.93);
+          color: #fff;
+          padding: 5px 8px;
+          font-size: 10px;
+          font-weight: 800;
+          box-shadow: 0 3px 10px rgba(0,0,0,.12);
+          backdrop-filter: blur(8px);
         }
 
         .cit-library-poster {
@@ -757,6 +879,28 @@ export default function MyLibrary({
         .cit-library-checked {
           margin-top: 6px;
           color: #989c99;
+          font-size: 9px;
+        }
+
+        .cit-library-watched-button {
+          margin-top: 9px;
+          border: 1px solid #b8d1c4;
+          background: #eef7f2;
+          color: #28513f;
+          padding: 6px 8px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 10px;
+          font-weight: 750;
+        }
+
+        .cit-library-watched-button[disabled] {
+          cursor: default;
+        }
+
+        .cit-library-watched-date {
+          margin-top: 5px;
+          color: #8a918d;
           font-size: 9px;
         }
 
@@ -979,10 +1123,20 @@ export default function MyLibrary({
             const hasStreaming = providers.length > 0;
             const alertActive = alertFilmIds.has(filmKey);
             const alertSaving = alertSavingFilmIds.has(filmKey);
+            const watchedAt = watchedByFilmId[filmKey] || null;
+            const savingWatched = savingWatchedFilmIds.has(filmKey);
 
             return (
               <article key={item.id} className="cit-library-card">
                 <div className="cit-library-poster-wrap">
+                  {watchedAt && (
+                    <span
+                      className="cit-library-watched-badge"
+                      title={`Watched ${formatWatchedDate(watchedAt)}`}
+                    >
+                      ✓ Watched
+                    </span>
+                  )}
                   {film?.poster_path ? (
                     <img
                       className="cit-library-poster"
@@ -1060,6 +1214,25 @@ export default function MyLibrary({
                       </div>
                     )}
                   </div>
+
+                  <button
+                    type="button"
+                    className="cit-library-watched-button"
+                    onClick={() => markAsWatched(filmId)}
+                    disabled={!!watchedAt || savingWatched}
+                  >
+                    {savingWatched
+                      ? "Saving…"
+                      : watchedAt
+                      ? "✓ Watched"
+                      : "✓ Mark as watched"}
+                  </button>
+
+                  {watchedAt && (
+                    <div className="cit-library-watched-date">
+                      Watched {formatWatchedDate(watchedAt)}
+                    </div>
+                  )}
 
                   <button
                     type="button"
