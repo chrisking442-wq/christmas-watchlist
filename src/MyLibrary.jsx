@@ -740,6 +740,8 @@ export default function MyLibrary({
 
         .cit-library-card {
           min-width: 0;
+          display: flex;
+          flex-direction: column;
           cursor: pointer;
           overflow: hidden;
           border: 1px solid #e2ddd4;
@@ -808,7 +810,10 @@ export default function MyLibrary({
         }
 
         .cit-library-body {
-          padding: 11px 11px 12px;
+          flex: 1 1 auto;
+          display: flex;
+          flex-direction: column;
+          padding: 11px 11px 0;
         }
 
         .cit-library-title {
@@ -915,45 +920,66 @@ export default function MyLibrary({
           font-size: 9px;
         }
 
+        .cit-library-actions {
+          margin-top: auto;
+          padding: 10px 0 11px;
+          border-top: 1px solid #ece7df;
+        }
+
         .cit-library-watched-button {
-          margin-top: 9px;
+          width: 100%;
           border: 1px solid #b8d1c4;
           background: #eef7f2;
           color: #28513f;
-          padding: 6px 8px;
+          padding: 7px 9px;
           border-radius: 8px;
           cursor: pointer;
           font-size: 10px;
           font-weight: 750;
+          text-align: center;
           transition:
             transform .16s ease,
-            background .16s ease;
+            background .16s ease,
+            border-color .16s ease;
         }
 
         .cit-library-watched-button:hover:not([disabled]) {
           transform: translateY(-1px);
           background: #e4f2ea;
+          border-color: #9fc3af;
         }
 
         .cit-library-watched-button[disabled] {
           cursor: default;
+          opacity: .84;
         }
 
         .cit-library-watched-date {
           margin-top: 5px;
           color: #8a918d;
           font-size: 9px;
+          text-align: center;
         }
 
         .cit-library-remove {
-          margin-top: 10px;
+          display: block;
+          width: 100%;
+          margin-top: 8px;
           border: 0;
           background: transparent;
-          color: #8c3f3f;
-          padding: 0;
+          color: #965353;
+          padding: 3px 2px;
           cursor: pointer;
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 650;
+          text-align: center;
+          transition: color .16s ease;
+        }
+
+        .cit-library-remove:hover {
+          color: #762f2f;
+          text-decoration: underline;
+          text-underline-offset: 2px;
         }
 
         .cit-library-empty {
@@ -1283,34 +1309,36 @@ export default function MyLibrary({
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    className="cit-library-watched-button"
-                    onClick={() => markAsWatched(filmId)}
-                    disabled={!!watchedAt || savingWatched}
-                  >
-                    {savingWatched
-                      ? "Saving…"
-                      : watchedAt
-                      ? "✓ Watched"
-                      : "✓ Mark as watched"}
-                  </button>
+                  <div className="cit-library-actions">
+                    <button
+                      type="button"
+                      className="cit-library-watched-button"
+                      onClick={() => markAsWatched(filmId)}
+                      disabled={!!watchedAt || savingWatched}
+                    >
+                      {savingWatched
+                        ? "Saving…"
+                        : watchedAt
+                        ? "✓ Watched"
+                        : "✓ Mark as watched"}
+                    </button>
 
-                  {watchedAt && (
-                    <div className="cit-library-watched-date">
-                      Watched {formatWatchedDate(watchedAt)}
-                    </div>
-                  )}
+                    {watchedAt && (
+                      <div className="cit-library-watched-date">
+                        Watched {formatWatchedDate(watchedAt)}
+                      </div>
+                    )}
 
-                  <button
-                    type="button"
-                    className="cit-library-remove"
-                    onClick={() =>
-                      removeItem(item.id, film?.tmdb_id)
-                    }
-                  >
-                    Remove from {pageTitle}
-                  </button>
+                    <button
+                      type="button"
+                      className="cit-library-remove"
+                      onClick={() =>
+                        removeItem(item.id, film?.tmdb_id)
+                      }
+                    >
+                      Remove from {pageTitle}
+                    </button>
+                  </div>
                 </div>
               </article>
             );
