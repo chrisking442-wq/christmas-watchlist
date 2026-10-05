@@ -1099,6 +1099,110 @@ const saveFavouriteFilm = async (film) => {
           border-radius: 8px;
         }
 
+        .cit-header-logo-image {
+          display: block;
+          width: min(350px, 42vw);
+          height: auto;
+        }
+
+        .cit-brand-lockup {
+          display: inline-block;
+          line-height: 1;
+        }
+
+        .cit-brand-title {
+          display: inline-block;
+          position: relative;
+          color: #123b2d;
+          font-size: clamp(30px, 4.8vw, 43px);
+          font-weight: 850;
+          letter-spacing: -0.055em;
+          line-height: .92;
+        }
+
+        .cit-brand-first-letter {
+          position: relative;
+          display: inline-block;
+          margin-right: .01em;
+        }
+
+        .cit-santa-hat {
+          position: absolute;
+          width: 20px;
+          height: 13px;
+          top: -9px;
+          left: -2px;
+          background: #a51f24;
+          border-radius: 12px 12px 2px 2px;
+          transform: rotate(-18deg) skewX(-11deg);
+          transform-origin: center bottom;
+          box-shadow: 0 1px 2px rgba(80, 24, 26, .08);
+        }
+
+        .cit-santa-hat::before {
+          content: "";
+          position: absolute;
+          left: -1px;
+          right: -1px;
+          bottom: -1px;
+          height: 4px;
+          border-radius: 999px;
+          background: #fbf7f0;
+          transform: skewX(11deg);
+        }
+
+        .cit-santa-hat::after {
+          content: "";
+          position: absolute;
+          width: 6px;
+          height: 6px;
+          left: -5px;
+          top: 0;
+          border-radius: 50%;
+          background: #fbf7f0;
+          transform: skewX(11deg);
+          box-shadow: 0 1px 2px rgba(80, 24, 26, .08);
+        }
+
+        .cit-brand-subtitle {
+          margin-top: 7px;
+          color: #922b2f;
+          font-size: clamp(9px, 1.7vw, 11px);
+          font-weight: 760;
+          letter-spacing: .17em;
+          line-height: 1.2;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        .cit-brand-rule {
+          position: relative;
+          width: 74%;
+          height: 2px;
+          margin: 7px auto 0;
+          border-radius: 999px;
+          background: linear-gradient(
+            90deg,
+            transparent 0%,
+            #a51f24 10%,
+            #a51f24 90%,
+            transparent 100%
+          );
+          opacity: .78;
+          transform: rotate(-.7deg);
+        }
+
+        .cit-brand-rule::after {
+          content: "";
+          position: absolute;
+          right: 7%;
+          top: -1px;
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          background: #a51f24;
+        }
+
         .cit-header-actions {
           display: flex;
           align-items: center;
@@ -1262,36 +1366,122 @@ const saveFavouriteFilm = async (film) => {
           scroll-margin-top: 20px;
         }
 
-        .cit-discover-heading {
+        .cit-discover-hero {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
           display: flex;
           align-items: flex-end;
           justify-content: space-between;
-          gap: 16px;
-          margin: 26px 0 12px;
+          gap: 22px;
+          min-height: 132px;
+          margin: 18px 0 16px;
+          padding: 23px 24px 22px;
+          border: 1px solid #dfe4df;
+          border-radius: 18px;
+          background:
+            radial-gradient(
+              circle at 8% 18%,
+              rgba(255,255,255,.92) 0 1.2px,
+              transparent 1.5px
+            ),
+            radial-gradient(
+              circle at 22% 38%,
+              rgba(255,255,255,.74) 0 1px,
+              transparent 1.4px
+            ),
+            radial-gradient(
+              circle at 61% 19%,
+              rgba(255,255,255,.88) 0 1px,
+              transparent 1.4px
+            ),
+            radial-gradient(
+              circle at 84% 31%,
+              rgba(255,255,255,.78) 0 1.3px,
+              transparent 1.7px
+            ),
+            linear-gradient(
+              135deg,
+              #eef3f0 0%,
+              #e7eeeb 43%,
+              #f3f1eb 100%
+            );
+          box-shadow: 0 6px 22px rgba(36, 52, 44, .055);
         }
 
-        .cit-discover-heading h1 {
+        .cit-discover-hero::before {
+          content: "";
+          position: absolute;
+          z-index: -1;
+          right: -4%;
+          bottom: -78px;
+          width: 58%;
+          height: 165px;
+          border-radius: 50% 48% 0 0;
+          border-top: 1px solid rgba(18,59,45,.08);
+          background:
+            linear-gradient(
+              180deg,
+              rgba(255,255,255,.18),
+              rgba(255,255,255,.46)
+            );
+          transform: rotate(-4deg);
+        }
+
+        .cit-discover-hero::after {
+          content: "";
+          position: absolute;
+          z-index: -1;
+          left: -7%;
+          bottom: -112px;
+          width: 64%;
+          height: 165px;
+          border-radius: 50% 52% 0 0;
+          border-top: 1px solid rgba(18,59,45,.055);
+          background: rgba(255,255,255,.2);
+          transform: rotate(4deg);
+        }
+
+        .cit-discover-copy {
+          position: relative;
+          z-index: 1;
+          max-width: 710px;
+        }
+
+        .cit-discover-eyebrow {
+          margin-bottom: 7px;
+          color: #8d4b4e;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+        }
+
+        .cit-discover-hero h1 {
           margin: 0;
           color: #123b2d;
-          font-size: clamp(25px, 3.8vw, 36px);
-          line-height: 1.05;
-          letter-spacing: -0.035em;
+          font-size: clamp(27px, 3.9vw, 39px);
+          line-height: 1;
+          letter-spacing: -0.045em;
         }
 
-        .cit-discover-heading p {
-          margin: 7px 0 0;
-          color: #647069;
+        .cit-discover-hero p {
+          max-width: 680px;
+          margin: 8px 0 0;
+          color: #586861;
           font-size: 14px;
           line-height: 1.5;
         }
 
         .cit-search-all {
+          position: relative;
+          z-index: 1;
           flex: 0 0 auto;
           border: 1px solid #123b2d;
           background: #123b2d;
           color: #fff;
-          padding: 10px 15px;
-          border-radius: 10px;
+          padding: 11px 16px;
+          border-radius: 11px;
           cursor: pointer;
           font-weight: 700;
           box-shadow: 0 3px 10px rgba(18, 59, 45, 0.12);
@@ -1384,10 +1574,32 @@ const saveFavouriteFilm = async (film) => {
             height: 36px;
           }
 
-          .cit-discover-heading {
+          .cit-header-logo-image {
+            width: min(320px, 76vw);
+          }
+
+          .cit-discover-hero {
             align-items: stretch;
             flex-direction: column;
-            margin-top: 20px;
+            gap: 16px;
+            min-height: 0;
+            margin-top: 14px;
+            padding: 18px 17px 17px;
+            border-radius: 15px;
+          }
+
+          .cit-discover-hero::before {
+            right: -24%;
+            width: 95%;
+          }
+
+          .cit-discover-hero::after {
+            left: -26%;
+            width: 100%;
+          }
+
+          .cit-discover-hero p {
+            font-size: 13px;
           }
 
           .cit-search-all {
@@ -1446,96 +1658,11 @@ const saveFavouriteFilm = async (film) => {
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           aria-label="Check It Twice home"
         >
-          <div style={{ lineHeight: 1, display: "inline-block" }}>
-            <div
-              style={{
-                fontSize: "clamp(29px, 5vw, 42px)",
-                fontWeight: 800,
-                letterSpacing: "-1.5px",
-                color: "#123b2d",
-                position: "relative",
-                display: "inline-block",
-              }}
-            >
-              <span
-                style={{
-                  position: "relative",
-                  display: "inline-block",
-                }}
-              >
-                C
-
-                {/* Original small Santa hat */}
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: "absolute",
-                    width: 18,
-                    height: 12,
-                    background: "#a61b1b",
-                    top: -7,
-                    left: -1,
-                    transform: "rotate(-18deg) skewX(-12deg)",
-                    borderRadius: "10px 10px 2px 2px",
-                  }}
-                />
-
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: "absolute",
-                    width: 19,
-                    height: 4,
-                    background: "#f6f0e6",
-                    top: 2,
-                    left: -2,
-                    transform: "rotate(-8deg)",
-                    borderRadius: 10,
-                  }}
-                />
-
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: "absolute",
-                    width: 6,
-                    height: 6,
-                    background: "#f6f0e6",
-                    borderRadius: "50%",
-                    top: -6,
-                    left: -5,
-                  }}
-                />
-              </span>
-              heck It Twice
-            </div>
-
-            <div
-              style={{
-                marginTop: 7,
-                fontSize: "clamp(9px, 1.9vw, 12px)",
-                fontWeight: 650,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color: "#9b1c1c",
-              }}
-            >
-              The Ultimate Christmas Watchlist
-            </div>
-
-            <div
-              style={{
-                marginTop: 6,
-                height: 2,
-                width: "72%",
-                marginLeft: "14%",
-                background: "#a61b1b",
-                borderRadius: 10,
-                opacity: 0.76,
-                transform: "rotate(-1deg)",
-              }}
-            />
-          </div>
+          <img
+            className="cit-header-logo-image"
+            src="/check-it-twice-logo-final.png"
+            alt="Check It Twice — The Ultimate Christmas Watchlist"
+          />
         </button>
 
         <div className="cit-header-actions">
@@ -1672,12 +1799,17 @@ const saveFavouriteFilm = async (film) => {
           className="cit-section-anchor"
           aria-labelledby="discover-title"
         >
-          <div className="cit-discover-heading">
-            <div>
+          <div className="cit-discover-hero">
+            <div className="cit-discover-copy">
+              <div className="cit-discover-eyebrow">
+                Build your Christmas watchlist
+              </div>
+
               <h1 id="discover-title">Discover</h1>
+
               <p>
-                Browse the Christmas catalogue, filter by UK streaming service,
-                or search for any film you consider part of Christmas.
+                Browse the Christmas catalogue, see where films are streaming
+                in the UK, and add the ones you want to watch this Christmas.
               </p>
             </div>
 

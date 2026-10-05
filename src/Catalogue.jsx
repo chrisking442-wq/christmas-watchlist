@@ -1123,6 +1123,30 @@ export default function Catalogue({
       return (a.title || "").localeCompare(b.title || "");
     });
 
+  const providerFilterLogos = {};
+
+  Object.values(watchProviders).forEach((providerData) => {
+    const providers = [
+      ...(providerData?.flatrate || []),
+      ...(providerData?.free || []),
+      ...(providerData?.ads || []),
+    ];
+
+    providers.forEach((provider) => {
+      if (!provider?.logo_path) return;
+
+      const normalised = normaliseProviderName(
+        provider.provider_name || ""
+      );
+
+      if (normalised === "Apple TV" || normalised.startsWith("Apple TV (")) {
+        providerFilterLogos["Apple TV"] ||= provider.logo_path;
+      } else {
+        providerFilterLogos[normalised] ||= provider.logo_path;
+      }
+    });
+  });
+
   const showCuratedHome =
     !search.trim() &&
     !decade &&
@@ -1325,9 +1349,12 @@ export default function Catalogue({
           display: flex;
           gap: 7px;
           overflow-x: auto;
-          padding: 1px 1px 8px;
-          margin-bottom: 5px;
+          overscroll-behavior-inline: contain;
+          scroll-padding-inline: 1px 18px;
+          padding: 1px 18px 8px 1px;
+          margin: 0 -18px 5px 0;
           scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
         }
 
         .cit-platform-filters::-webkit-scrollbar {
@@ -1336,19 +1363,55 @@ export default function Catalogue({
 
         .cit-filter-chip {
           flex: 0 0 auto;
+          min-height: 34px;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
           border: 1px solid #d8d3ca;
-          background: rgba(255,255,255,.76);
+          background: rgba(255,255,255,.82);
           color: #40574f;
           border-radius: 999px;
-          padding: 7px 11px;
+          padding: 5px 10px 5px 7px;
           cursor: pointer;
           font-size: 12px;
           font-weight: 650;
+          white-space: nowrap;
+          box-shadow: 0 1px 4px rgba(28,42,35,.025);
           transition:
             border-color .16s ease,
             background .16s ease,
             color .16s ease,
-            transform .16s ease;
+            transform .16s ease,
+            box-shadow .16s ease;
+        }
+
+        .cit-filter-chip--all {
+          padding-left: 11px;
+        }
+
+        .cit-filter-logo {
+          width: 22px;
+          height: 22px;
+          flex: 0 0 22px;
+          display: block;
+          object-fit: cover;
+          border-radius: 6px;
+          background: #fff;
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
+        }
+
+        .cit-filter-logo-fallback {
+          width: 22px;
+          height: 22px;
+          flex: 0 0 22px;
+          display: grid;
+          place-items: center;
+          border-radius: 6px;
+          background: #f0ede7;
+          color: #53665e;
+          font-size: 9px;
+          font-weight: 800;
+          line-height: 1;
         }
 
         .cit-filter-chip:active {
@@ -1358,6 +1421,7 @@ export default function Catalogue({
         .cit-filter-chip:hover {
           border-color: #9badA5;
           color: #123b2d;
+          box-shadow: 0 3px 9px rgba(28,42,35,.06);
         }
 
         .cit-filter-chip--active {
@@ -2302,6 +2366,26 @@ export default function Catalogue({
         }
 
         @media (max-width: 720px) {
+          .cit-platform-filters {
+            margin-right: -12px;
+            padding-right: 18px;
+          }
+
+          .cit-filter-chip {
+            min-height: 32px;
+            gap: 6px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            font-size: 11px;
+          }
+
+          .cit-filter-logo,
+          .cit-filter-logo-fallback {
+            width: 21px;
+            height: 21px;
+            flex-basis: 21px;
+          }
+
           .cit-shelf + .cit-shelf {
             margin-top: 20px;
           }
@@ -2593,20 +2677,51 @@ export default function Catalogue({
         </select>
       </div>
 
-      <div className="cit-platform-filters">
+      <div
+        className="cit-platform-filters"
+        aria-label="Filter by streaming service"
+      >
         {PLATFORM_FILTERS.map((provider) => {
           const label = provider || "All";
+          const logoPath = provider
+            ? providerFilterLogos[provider]
+            : null;
 
           return (
             <button
               key={label}
               type="button"
               className={`cit-filter-chip ${
+                !provider ? "cit-filter-chip--all" : ""
+              } ${
                 platform === provider ? "cit-filter-chip--active" : ""
               }`}
               onClick={() => setPlatform(provider)}
+              aria-pressed={platform === provider}
             >
-              {label}
+              {provider ? (
+                logoPath ? (
+                  <img
+                    className="cit-filter-logo"
+                    src={`${TMDB_IMG}/w45${logoPath}`}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <span
+                    className="cit-filter-logo-fallback"
+                    aria-hidden="true"
+                  >
+                    {provider
+                      .split(/\s+/)
+                      .map((word) => word[0])
+                      .join("")
+                      .slice(0, 2)}
+                  </span>
+                )
+              ) : null}
+
+              <span>{label}</span>
             </button>
           );
         })}
