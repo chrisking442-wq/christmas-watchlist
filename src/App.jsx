@@ -10,6 +10,7 @@ import SharedList from "./SharedList";
 import Planner from "./Planner";
 import SharedPlanner from "./SharedPlanner";
 import Collections from "./Collections";
+import CollectionAddModal from "./CollectionAddModal";
 
 /* ========= ENV / CLIENTS ========= */
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -608,6 +609,7 @@ useEffect(() => {
   const [isLoadingDiscover, setIsLoadingDiscover] = useState(false);
   const [discoverQuery, setDiscoverQuery] = useState("");
   const [addingKey, setAddingKey] = useState("");
+  const [searchCollectionFilm, setSearchCollectionFilm] = useState(null);
   const [watchlistTmdbIds, setWatchlistTmdbIds] = useState(new Set());
   const [favouriteTmdbIds, setFavouriteTmdbIds] = useState(new Set());
   const [catalogueRefreshKey, setCatalogueRefreshKey] = useState(0);
@@ -2943,239 +2945,479 @@ const saveFavouriteFilm = async (film) => {
         </div>
       )}
 
-{/* Discover modal */}
+{/* Search all films modal */}
 {showDiscover && (
   <div
+    className="cit-film-search-overlay"
     onClick={closeDiscover}
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.45)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 16,
-      zIndex: 1000,
-    }}
   >
+    <style>{`
+      .cit-film-search-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 5000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        box-sizing: border-box;
+        background: rgba(12, 28, 22, .62);
+        backdrop-filter: blur(8px);
+      }
+
+      .cit-film-search-modal {
+        width: min(1120px, 100%);
+        max-height: calc(100vh - 48px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,.7);
+        border-radius: 20px;
+        background: #f8f5ef;
+        box-shadow: 0 30px 90px rgba(7, 22, 16, .34);
+      }
+
+      .cit-film-search-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 20px 22px 16px;
+        border-bottom: 1px solid #e5ded4;
+        background:
+          linear-gradient(135deg, rgba(18,59,45,.055), rgba(144,48,55,.04)),
+          #fbf9f5;
+      }
+
+      .cit-film-search-eyebrow {
+        margin-bottom: 4px;
+        color: #96363d;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: .16em;
+      }
+
+      .cit-film-search-head h2 {
+        margin: 0;
+        color: #123b2d;
+        font-size: clamp(24px, 3vw, 32px);
+        line-height: 1.05;
+        letter-spacing: -.035em;
+      }
+
+      .cit-film-search-head p {
+        max-width: 650px;
+        margin: 7px 0 0;
+        color: #68766f;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .cit-film-search-close {
+        flex: 0 0 auto;
+        width: 38px;
+        height: 38px;
+        border: 1px solid #d8d2c9;
+        border-radius: 999px;
+        background: #fff;
+        color: #53625a;
+        cursor: pointer;
+        font-size: 17px;
+        box-shadow: 0 2px 8px rgba(24,42,33,.05);
+      }
+
+      .cit-film-search-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 9px;
+        padding: 14px 22px;
+        border-bottom: 1px solid #e7e0d6;
+        background: rgba(255,255,255,.72);
+      }
+
+      .cit-film-search-input {
+        min-width: 0;
+        box-sizing: border-box;
+        border: 1px solid #d5cfc5;
+        border-radius: 12px;
+        padding: 11px 13px;
+        background: #fff;
+        color: #193b30;
+        outline: none;
+        font-size: 14px;
+      }
+
+      .cit-film-search-input:focus {
+        border-color: #879c91;
+        box-shadow: 0 0 0 3px rgba(18,59,45,.07);
+      }
+
+      .cit-film-search-submit {
+        border: 0;
+        border-radius: 12px;
+        padding: 0 18px;
+        background: #123b2d;
+        color: #fff;
+        cursor: pointer;
+        font-weight: 850;
+        box-shadow: 0 4px 12px rgba(18,59,45,.15);
+      }
+
+      .cit-film-search-results {
+        min-height: 190px;
+        overflow: auto;
+        padding: 18px 22px 22px;
+      }
+
+      .cit-film-search-status {
+        padding: 28px 4px;
+        color: #6b786f;
+        text-align: center;
+        font-size: 13px;
+      }
+
+      .cit-film-search-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .cit-film-search-card {
+        display: grid;
+        grid-template-columns: 82px minmax(0, 1fr);
+        gap: 12px;
+        min-width: 0;
+        padding: 10px;
+        border: 1px solid #e1dbd2;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 4px 13px rgba(47, 38, 27, .035);
+      }
+
+      .cit-film-search-poster {
+        width: 82px;
+        height: 123px;
+        object-fit: cover;
+        border-radius: 9px;
+        background: #ece8e0;
+      }
+
+      .cit-film-search-copy {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+      }
+
+      .cit-film-search-title {
+        margin-top: 2px;
+        color: #143b2d;
+        font-size: 15px;
+        font-weight: 850;
+        line-height: 1.25;
+      }
+
+      .cit-film-search-year {
+        color: #77827c;
+        font-weight: 600;
+      }
+
+      .cit-film-search-badge {
+        display: inline-flex;
+        align-items: center;
+        align-self: flex-start;
+        margin-top: 6px;
+        padding: 3px 7px;
+        border: 1px solid #cfe2d7;
+        border-radius: 999px;
+        background: #f0f8f3;
+        color: #296047;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .cit-film-search-overview {
+        display: -webkit-box;
+        overflow: hidden;
+        margin-top: 7px;
+        color: #69766f;
+        font-size: 11px;
+        line-height: 1.4;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+
+      .cit-film-search-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: auto;
+        padding-top: 9px;
+      }
+
+      .cit-film-search-actions button {
+        border-radius: 9px;
+        padding: 6px 8px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 750;
+      }
+
+      .cit-film-search-list {
+        border: 1px solid #c8d8d0;
+        background: #f6faf8;
+        color: #265343;
+      }
+
+      .cit-film-search-list.is-added {
+        border-color: #bdd8c9;
+        background: #eef8f2;
+        cursor: default;
+      }
+
+      .cit-film-search-favourite {
+        border: 1px solid #efd0d3;
+        background: #fffafa;
+        color: #90353b;
+      }
+
+      .cit-film-search-favourite.is-added {
+        background: #fff1f2;
+        cursor: default;
+      }
+
+      .cit-film-search-collection {
+        border: 1px solid #d6d0c5;
+        background: #fffdf9;
+        color: #475c52;
+      }
+
+      @media (max-width: 760px) {
+        .cit-film-search-overlay {
+          align-items: flex-end;
+          padding: 0;
+        }
+
+        .cit-film-search-modal {
+          width: 100%;
+          max-height: 92vh;
+          border-radius: 20px 20px 0 0;
+        }
+
+        .cit-film-search-head {
+          padding: 17px 16px 13px;
+        }
+
+        .cit-film-search-head p {
+          font-size: 12px;
+        }
+
+        .cit-film-search-form {
+          grid-template-columns: 1fr;
+          padding: 12px 16px;
+        }
+
+        .cit-film-search-submit {
+          min-height: 42px;
+        }
+
+        .cit-film-search-results {
+          padding: 14px 14px calc(18px + env(safe-area-inset-bottom));
+        }
+
+        .cit-film-search-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .cit-film-search-card {
+          grid-template-columns: 74px minmax(0, 1fr);
+        }
+
+        .cit-film-search-poster {
+          width: 74px;
+          height: 111px;
+        }
+
+        .cit-film-search-overview {
+          display: none;
+        }
+      }
+    `}</style>
+
     <div
+      className="cit-film-search-modal"
       onClick={(e) => e.stopPropagation()}
-      style={{
-        width: "min(100%,980px)",
-        maxHeight: "88vh",
-        overflow: "auto",
-        background: "#fff",
-        borderRadius: 16,
-        boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
-      }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "12px 14px",
-          borderBottom: "1px solid #eee",
-        }}
-      >
-        <b>Search all films</b>
+      <div className="cit-film-search-head">
+        <div>
+          <div className="cit-film-search-eyebrow">SEARCH BEYOND THE CHRISTMAS CATALOGUE</div>
+          <h2>Search all films</h2>
+          <p>
+            Find any film on TMDB and save it to your Christmas List,
+            Favourites or one of your own Collections.
+          </p>
+        </div>
+
         <button
+          type="button"
+          className="cit-film-search-close"
           onClick={closeDiscover}
           title="Close"
-          style={{ cursor: "pointer", border: "1px solid #e5e7eb", borderRadius: 8, padding: "4px 8px" }}
+          aria-label="Close search"
         >
           ✕
         </button>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          padding: "10px 14px",
-          borderBottom: "1px solid #eee",
-          flexWrap: "wrap",
-        }}
-      >
+      <div className="cit-film-search-form">
         <input
-          placeholder="Search for any film..."
+          autoFocus
+          className="cit-film-search-input"
+          placeholder="Search for any film…"
           value={discoverQuery}
           onChange={(e) => setDiscoverQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") searchDiscover(discoverQuery);
           }}
-          style={{ border: "1px solid #e5e7eb", padding: "8px 12px", borderRadius: 10, flex: "1 1 320px" }}
         />
         <button
+          type="button"
+          className="cit-film-search-submit"
           onClick={() => searchDiscover(discoverQuery)}
-          style={{
-            border: "1px solid #c7d2fe",
-            background: "#eef2ff",
-            padding: "8px 12px",
-            borderRadius: 10,
-            cursor: "pointer",
-          }}
         >
           Search
         </button>
       </div>
 
-      <div style={{ padding: 14 }}>
-        {isLoadingDiscover && <div>Loading…</div>}
-        {!isLoadingDiscover && !discover.length && (
-          <div style={{ color: "#666" }}>Type a search and press Enter.</div>
-        )}
+      <div className="cit-film-search-results">
+        {isLoadingDiscover ? (
+          <div className="cit-film-search-status">Searching…</div>
+        ) : !discover.length ? (
+          <div className="cit-film-search-status">
+            Search by title to find films outside the Christmas catalogue.
+          </div>
+        ) : (
+          <div className="cit-film-search-grid">
+            {discover.map((d) => {
+              const key = `${d.title}__${d.year}`;
+              const isAdding = addingKey === String(d.id);
+              const exists = watchlistTmdbIds.has(d.id);
+              const isFavourite = favouriteTmdbIds.has(d.id);
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {discover.map((d) => {
-            const key = `${d.title}__${d.year}`;
-            const isAdding = addingKey === String(d.id);
-            const exists = watchlistTmdbIds.has(d.id);
-            const isFavourite = favouriteTmdbIds.has(d.id);
+              return (
+                <article
+                  key={key}
+                  className="cit-film-search-card"
+                >
+                  <img
+                    className="cit-film-search-poster"
+                    src={
+                      d.poster ||
+                      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+                    }
+                    alt={d.title}
+                    loading="lazy"
+                  />
 
-            return (
-              <div
-                key={key}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "100px 1fr",
-                  gap: 12,
-                  border: "1px solid #eee",
-                  borderRadius: 12,
-                  padding: 12,
-                  background: "#fff",
-                }}
-              >
-                <img
-                  src={
-                    d.poster ||
-                    "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-                  }
-                  alt={d.title}
-                  style={{
-                    width: 100,
-                    height: 150,
-                    objectFit: "cover",
-                    borderRadius: 8,
-                    background: "#f4f4f4",
-                  }}
-                  loading="lazy"
-                />
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <div style={{ fontWeight: 700 }}>
-                      {d.title}{" "}
+                  <div className="cit-film-search-copy">
+                    <div className="cit-film-search-title">
+                      {d.title}
                       {d.year ? (
-                        <span style={{ opacity: 0.65, fontWeight: 500 }}>({d.year})</span>
+                        <span className="cit-film-search-year"> ({d.year})</span>
                       ) : null}
                     </div>
+
                     {exists && (
-                      <span
-                        style={{
-                          fontSize: 12,
-                          padding: "2px 8px",
-                          borderRadius: 16,
-                          background: "#ecfdf5",
-                          border: "1px solid #d1fae5",
-                          color: "#065f46",
-                        }}
-                      >
-                        Already in list
+                      <span className="cit-film-search-badge">
+                        ✓ In My Christmas List
                       </span>
                     )}
+
+                    {d.overview && (
+                      <div className="cit-film-search-overview">
+                        {d.overview}
+                      </div>
+                    )}
+
+                    <div className="cit-film-search-actions">
+                      {exists ? (
+                        <button
+                          type="button"
+                          className="cit-film-search-list is-added"
+                          disabled
+                        >
+                          ✓ My List
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="cit-film-search-list"
+                          onClick={() => saveDiscoveredFilm(d)}
+                          disabled={isAdding}
+                        >
+                          {isAdding ? "Adding…" : "＋ My List"}
+                        </button>
+                      )}
+
+                      {isFavourite ? (
+                        <button
+                          type="button"
+                          className="cit-film-search-favourite is-added"
+                          disabled
+                        >
+                          ♥ Favourite
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="cit-film-search-favourite"
+                          onClick={() => saveFavouriteFilm(d)}
+                        >
+                          ♡ Favourite
+                        </button>
+                      )}
+
+                      {session?.user && (
+                        <button
+                          type="button"
+                          className="cit-film-search-collection"
+                          onClick={() =>
+                            setSearchCollectionFilm({
+                              id: null,
+                              tmdb_id: d.id,
+                              title: d.title,
+                              original_title: d.originalTitle || null,
+                              release_date: d.releaseDate || null,
+                              release_year: d.year || null,
+                              overview: d.overview || null,
+                              poster_path: d.posterPath || null,
+                              backdrop_path: d.backdropPath || null,
+                            })
+                          }
+                        >
+                          ＋ Collection
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>TMDB</div>
-                  <div style={{ marginTop: 8 }}>
-  {exists ? (
-    <button
-      disabled
-      style={{
-        border: "1px solid #e5e7eb",
-        padding: "6px 10px",
-        borderRadius: 8,
-      }}
-    >
-      Added ✓
-    </button>
-  ) : (
-    <button
-      onClick={() => saveDiscoveredFilm(d)}
-      disabled={isAdding}
-      style={{
-        border: "1px solid #e5e7eb",
-        padding: "6px 10px",
-        borderRadius: 8,
-        cursor: "pointer",
-      }}
-    >
-      {isAdding ? "Adding…" : "Add"}
-    </button>
-  )}
-
-  <div style={{ marginTop: 8 }}>
-    {isFavourite ? (
-      <button
-        disabled
-        style={{
-          border: "1px solid #fecdd3",
-          background: "#fff1f2",
-          padding: "6px 10px",
-          borderRadius: 8,
-        }}
-      >
-        ♥ Favourite
-      </button>
-    ) : (
-      <button
-        onClick={() => saveFavouriteFilm(d)}
-        style={{
-          border: "1px solid #fecdd3",
-          background: "#fff",
-          padding: "6px 10px",
-          borderRadius: 8,
-          cursor: "pointer",
-        }}
-      >
-        ♡ Favourite
-      </button>
-    )}
-  </div>
-</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div
-        style={{
-          padding: "10px 14px",
-          borderTop: "1px solid #eee",
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: 8,
-        }}
-      >
-        <button
-          onClick={closeDiscover}
-          style={{ border: "1px solid #e5e7eb", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}
-        >
-          Close
-        </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   </div>
 )}
 
 
+      {searchCollectionFilm && (
+        <CollectionAddModal
+          film={searchCollectionFilm}
+          supabase={supabase}
+          session={session}
+          onClose={() => setSearchCollectionFilm(null)}
+        />
+      )}
 
       {/* Toast */}
       {toast && (
