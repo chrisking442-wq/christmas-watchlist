@@ -111,6 +111,12 @@ export default function MyLibrary({
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState("");
   const [selectedFilm, setSelectedFilm] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareSaving, setShareSaving] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareRevoking, setShareRevoking] = useState(false);
+  const [shareError, setShareError] = useState("");
 
   const pageTitle =
     listType === "favourites" ? "Favourites" : "My Christmas List";
@@ -632,6 +638,103 @@ export default function MyLibrary({
     );
   }
 
+  async function openSharePanel() {
+    if (!selectedList?.id || !supabase) return;
+
+    setShareOpen(true);
+    setShareError("");
+    setShareCopied(false);
+
+    if (shareUrl) return;
+
+    setShareSaving(true);
+
+    const { data, error: shareRpcError } = await supabase.rpc(
+      "v2_create_or_get_list_share",
+      { p_list_id: selectedList.id }
+    );
+
+    setShareSaving(false);
+
+    if (shareRpcError) {
+      console.error("Couldn't create share link:", shareRpcError);
+      setShareError(shareRpcError.message || "Couldn't create a share link.");
+      return;
+    }
+
+    if (!data) {
+      setShareError("Couldn't create a share link.");
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("share", data);
+
+    setShareUrl(url.toString());
+  }
+
+  async function copyShareLink() {
+    if (!shareUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      window.prompt("Copy this link:", shareUrl);
+    }
+  }
+
+  async function nativeShareList() {
+    if (!shareUrl || typeof navigator.share !== "function") return;
+
+    try {
+      await navigator.share({
+        title: pageTitle,
+        text: `Here's my ${pageTitle} on Check It Twice.`,
+        url: shareUrl,
+      });
+    } catch (shareNativeError) {
+      if (shareNativeError?.name !== "AbortError") {
+        console.warn("Native sharing wasn't available:", shareNativeError);
+      }
+    }
+  }
+
+  async function stopSharingList() {
+    if (!selectedList?.id || !supabase || shareRevoking) return;
+
+    const confirmed = window.confirm(
+      "Stop sharing this list? Anyone using the current public link will no longer be able to open it."
+    );
+
+    if (!confirmed) return;
+
+    setShareRevoking(true);
+    setShareError("");
+
+    const { error: disableError } = await supabase.rpc(
+      "v2_disable_list_share",
+      { p_list_id: selectedList.id }
+    );
+
+    setShareRevoking(false);
+
+    if (disableError) {
+      console.error("Couldn't stop sharing:", disableError);
+      setShareError(
+        disableError.message || "Couldn't stop sharing this list."
+      );
+      return;
+    }
+
+    setShareUrl("");
+    setShareCopied(false);
+    setShareOpen(false);
+  }
+
   return (
     <div className="cit-library-view">
       <style>{`
@@ -659,6 +762,145 @@ export default function MyLibrary({
           margin-top: 7px;
           color: #68756f;
           font-size: 13px;
+        }
+
+        .cit-library-share-button {
+          flex: 0 0 auto;
+          border: 1px solid #123b2d;
+          background: #123b2d;
+          color: #fff;
+          min-height: 40px;
+          padding: 8px 13px;
+          border-radius: 10px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 800;
+          transition:
+            transform .16s ease,
+            background .16s ease;
+        }
+
+        .cit-library-share-button:hover:not([disabled]) {
+          transform: translateY(-1px);
+          background: #194b39;
+        }
+
+        .cit-library-share-button[disabled] {
+          cursor: default;
+          opacity: .55;
+        }
+
+        .cit-share-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 1400;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 18px;
+          background: rgba(16, 31, 25, .52);
+          backdrop-filter: blur(5px);
+        }
+
+        .cit-share-dialog {
+          width: min(470px, 100%);
+          border: 1px solid #ded8ce;
+          border-radius: 17px;
+          background: #fbfaf6;
+          padding: 19px;
+          box-shadow: 0 22px 60px rgba(22, 38, 31, .22);
+        }
+
+        .cit-share-dialog h2 {
+          margin: 0;
+          color: #123b2d;
+          font-size: 22px;
+          letter-spacing: -.025em;
+        }
+
+        .cit-share-dialog p {
+          margin: 7px 0 0;
+          color: #68756f;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .cit-share-link {
+          margin-top: 15px;
+          width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+          border: 1px solid #d8d3ca;
+          border-radius: 10px;
+          background: #fff;
+          color: #40574f;
+          padding: 10px 11px;
+          font-size: 11px;
+        }
+
+        .cit-share-error {
+          margin-top: 12px;
+          border: 1px solid #e7c2c2;
+          border-radius: 9px;
+          background: #fff2f2;
+          color: #8b3434;
+          padding: 9px 10px;
+          font-size: 11px;
+        }
+
+        .cit-share-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 13px;
+        }
+
+        .cit-share-actions button,
+        .cit-share-actions a {
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 9px;
+          padding: 8px 11px;
+          font-size: 11px;
+          font-weight: 800;
+          text-decoration: none;
+          cursor: pointer;
+        }
+
+        .cit-share-primary {
+          border: 1px solid #123b2d;
+          background: #123b2d;
+          color: #fff;
+        }
+
+        .cit-share-secondary {
+          border: 1px solid #d8d3ca;
+          background: #fff;
+          color: #365249;
+        }
+
+        .cit-share-stop {
+          border: 1px solid #e2b7b7 !important;
+          background: #fff4f4 !important;
+          color: #8f3535 !important;
+        }
+
+        .cit-share-stop:hover:not([disabled]) {
+          background: #fdeaea !important;
+        }
+
+        .cit-share-stop[disabled] {
+          cursor: default;
+          opacity: .6;
+        }
+
+        .cit-share-close {
+          margin-left: auto;
+          border: 0 !important;
+          background: transparent !important;
+          color: #747e79 !important;
         }
 
         .cit-library-alerts {
@@ -1043,6 +1285,23 @@ export default function MyLibrary({
             margin-top: 20px;
           }
 
+          .cit-library-header {
+            align-items: stretch;
+          }
+
+          .cit-library-share-button {
+            align-self: flex-end;
+          }
+
+          .cit-share-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .cit-share-close {
+            margin-left: 0;
+          }
+
           .cit-library-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
@@ -1090,6 +1349,17 @@ export default function MyLibrary({
                 }`}
           </div>
         </div>
+
+        {session?.user && selectedList && (
+          <button
+            type="button"
+            className="cit-library-share-button"
+            onClick={openSharePanel}
+            disabled={loadingItems}
+          >
+            ↗ Share list
+          </button>
+        )}
       </div>
 
       {error && (
@@ -1343,6 +1613,93 @@ export default function MyLibrary({
               </article>
             );
           })}
+        </div>
+      )}
+
+      {shareOpen && (
+        <div
+          className="cit-share-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setShareOpen(false);
+            }
+          }}
+        >
+          <div
+            className="cit-share-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cit-share-title"
+          >
+            <h2 id="cit-share-title">Share {pageTitle}</h2>
+            <p>
+              Anyone with this link can view the list. They don't need a
+              Check It Twice account, and the shared page is read-only.
+            </p>
+
+            {shareSaving ? (
+              <p>Creating your share link…</p>
+            ) : shareError ? (
+              <div className="cit-share-error">{shareError}</div>
+            ) : shareUrl ? (
+              <>
+                <input
+                  className="cit-share-link"
+                  value={shareUrl}
+                  readOnly
+                  aria-label="Public share link"
+                  onFocus={(event) => event.target.select()}
+                />
+
+                <div className="cit-share-actions">
+                  <button
+                    type="button"
+                    className="cit-share-primary"
+                    onClick={copyShareLink}
+                  >
+                    {shareCopied ? "✓ Copied" : "Copy link"}
+                  </button>
+
+                  {typeof navigator.share === "function" && (
+                    <button
+                      type="button"
+                      className="cit-share-secondary"
+                      onClick={nativeShareList}
+                    >
+                      Share…
+                    </button>
+                  )}
+
+                  <a
+                    className="cit-share-secondary"
+                    href={shareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Preview
+                  </a>
+
+                  <button
+                    type="button"
+                    className="cit-share-stop"
+                    onClick={stopSharingList}
+                    disabled={shareRevoking}
+                  >
+                    {shareRevoking ? "Stopping…" : "Stop sharing"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="cit-share-close"
+                    onClick={() => setShareOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
         </div>
       )}
 

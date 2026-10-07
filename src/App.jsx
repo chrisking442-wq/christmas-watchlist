@@ -6,6 +6,7 @@ import MyLibrary from "./MyLibrary";
 import Catalogue from "./Catalogue";
 import CatalogueAdmin from "./CatalogueAdmin";
 import WatchedHistory from "./WatchedHistory";
+import SharedList from "./SharedList";
 
 /* ========= ENV / CLIENTS ========= */
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -425,7 +426,7 @@ function ImdbLinkCell({ title, year, isTVSheet, fallbackUrl }) {
 }
 
 /* ========= MAIN APP ========= */
-export default function App() {
+function MainApp() {
     const [session, setSession] = useState(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const [activeView, setActiveView] = useState("discover");
@@ -2354,4 +2355,22 @@ const saveFavouriteFilm = async (film) => {
       )}
     </div>
   );
+}
+
+
+export default function App() {
+  let shareToken = "";
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    shareToken = String(params.get("share") || "").trim();
+  } catch {
+    shareToken = "";
+  }
+
+  if (shareToken) {
+    return <SharedList supabase={supabase} token={shareToken} />;
+  }
+
+  return <MainApp />;
 }
