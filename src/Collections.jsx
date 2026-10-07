@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import FilmDetailsModal from "./FilmDetailsModal";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 
@@ -19,6 +20,7 @@ export default function Collections({ supabase, session }) {
   const [renameValue, setRenameValue] = useState("");
 
   const [notice, setNotice] = useState("");
+  const [detailFilm, setDetailFilm] = useState(null);
 
   useEffect(() => {
     loadCollections();
@@ -68,6 +70,8 @@ export default function Collections({ supabase, session }) {
           id,
           tmdb_id,
           title,
+          original_title,
+          release_date,
           release_year,
           overview,
           poster_path,
@@ -381,7 +385,20 @@ export default function Collections({ supabase, session }) {
           ) : (
             <div className="cit-collection-films">
               {items.map((film) => (
-                <article key={film.film_id} className="cit-collection-film">
+                <article
+                  key={film.film_id}
+                  className="cit-collection-film"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open details for ${film.title}`}
+                  onClick={() => setDetailFilm(film)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setDetailFilm(film);
+                    }
+                  }}
+                >
                   <div className="cit-collection-poster">
                     {film.poster_path ? (
                       <img
@@ -400,7 +417,10 @@ export default function Collections({ supabase, session }) {
 
                   <button
                     className="cit-collection-remove"
-                    onClick={() => removeFilm(film)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeFilm(film);
+                    }}
                     title="Remove from collection"
                   >
                     Remove
@@ -410,6 +430,15 @@ export default function Collections({ supabase, session }) {
             </div>
           )}
         </>
+      )}
+
+      {detailFilm && (
+        <FilmDetailsModal
+          film={detailFilm}
+          supabase={supabase}
+          session={session}
+          onClose={() => setDetailFilm(null)}
+        />
       )}
 
       {showCreate && (
@@ -716,6 +745,20 @@ const styles = `
     border-radius: 14px;
     background: #fff;
     box-shadow: 0 5px 16px rgba(54,43,29,.035);
+    cursor: pointer;
+    outline: none;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+
+  .cit-collection-film:hover {
+    transform: translateY(-2px);
+    border-color: rgba(18,59,45,.24);
+    box-shadow: 0 10px 24px rgba(54,43,29,.08);
+  }
+
+  .cit-collection-film:focus-visible {
+    border-color: #688878;
+    box-shadow: 0 0 0 3px rgba(18,59,45,.12);
   }
 
   .cit-collection-poster {
