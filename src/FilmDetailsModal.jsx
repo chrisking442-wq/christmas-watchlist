@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import PlannerAddModal from "./PlannerAddModal";
+import CollectionAddModal from "./CollectionAddModal";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -173,6 +174,7 @@ export default function FilmDetailsModal({
   const [savingFavourite, setSavingFavourite] = useState(false);
   const [savingWatched, setSavingWatched] = useState(false);
   const [showPlannerAdd, setShowPlannerAdd] = useState(false);
+  const [showCollectionAdd, setShowCollectionAdd] = useState(false);
 
   useEffect(() => {
     if (!film) return;
@@ -912,6 +914,7 @@ export default function FilmDetailsModal({
 
         .cit-shared-detail-primary,
         .cit-shared-detail-secondary,
+        .cit-shared-detail-collection,
         .cit-shared-detail-planner,
         .cit-shared-detail-watched {
           border-radius: 9px;
@@ -928,6 +931,7 @@ export default function FilmDetailsModal({
 
         .cit-shared-detail-primary:hover:not([disabled]),
         .cit-shared-detail-secondary:hover:not([disabled]),
+        .cit-shared-detail-collection:hover:not([disabled]),
         .cit-shared-detail-planner:hover:not([disabled]),
         .cit-shared-detail-watched:hover:not([disabled]) {
           transform: translateY(-1px);
@@ -961,6 +965,16 @@ export default function FilmDetailsModal({
           background: #fff4f5;
           color: #8f2730;
           cursor: default;
+        }
+
+        .cit-shared-detail-collection {
+          border: 1px solid #cfd8d3;
+          background: #f6faf8;
+          color: #2c5142;
+        }
+
+        .cit-shared-detail-collection:hover:not([disabled]) {
+          background: #edf6f1;
         }
 
         .cit-shared-detail-planner {
@@ -1280,6 +1294,7 @@ export default function FilmDetailsModal({
           }
 
           .cit-shared-detail-actions > .cit-shared-detail-secondary,
+          .cit-shared-detail-actions > .cit-shared-detail-collection,
           .cit-shared-detail-actions > .cit-shared-detail-planner,
           .cit-shared-detail-actions > div,
           .cit-shared-detail-watched {
@@ -1289,6 +1304,7 @@ export default function FilmDetailsModal({
 
           .cit-shared-detail-primary,
           .cit-shared-detail-secondary,
+          .cit-shared-detail-collection,
           .cit-shared-detail-planner,
           .cit-shared-detail-watched {
             min-height: 40px;
@@ -1478,6 +1494,16 @@ export default function FilmDetailsModal({
               {session?.user && (
                 <button
                   type="button"
+                  className="cit-shared-detail-collection"
+                  onClick={() => setShowCollectionAdd(true)}
+                >
+                  ＋ Add to Collection
+                </button>
+              )}
+
+              {session?.user && (
+                <button
+                  type="button"
                   className="cit-shared-detail-planner"
                   onClick={() => setShowPlannerAdd(true)}
                 >
@@ -1637,6 +1663,15 @@ export default function FilmDetailsModal({
           </div>
         </div>
       </div>
+
+      {showCollectionAdd && (
+        <CollectionAddModal
+          film={film}
+          supabase={supabase}
+          session={session}
+          onClose={() => setShowCollectionAdd(false)}
+        />
+      )}
 
       {showPlannerAdd && (
         <PlannerAddModal

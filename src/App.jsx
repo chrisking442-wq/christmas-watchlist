@@ -9,6 +9,7 @@ import WatchedHistory from "./WatchedHistory";
 import SharedList from "./SharedList";
 import Planner from "./Planner";
 import SharedPlanner from "./SharedPlanner";
+import Collections from "./Collections";
 
 /* ========= ENV / CLIENTS ========= */
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -432,6 +433,7 @@ function MainApp() {
     const [session, setSession] = useState(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const [activeView, setActiveView] = useState("discover");
+    const [libraryView, setLibraryView] = useState("watchlist");
     const [accountOpen, setAccountOpen] = useState(false);
     const [showAdminTools, setShowAdminTools] = useState(false);
     const [decoratedMode, setDecoratedMode] = useState(() => {
@@ -2042,6 +2044,68 @@ const saveFavouriteFilm = async (film) => {
           }
         }
 
+        .cit-library-tabs-wrap {
+          display: flex;
+          justify-content: center;
+          margin: 8px 0 14px;
+        }
+
+        .cit-library-tabs {
+          display: inline-flex;
+          gap: 4px;
+          padding: 4px;
+          border: 1px solid rgba(18, 59, 45, .12);
+          border-radius: 999px;
+          background: rgba(255, 253, 249, .86);
+          box-shadow: 0 4px 12px rgba(49, 41, 30, .035);
+        }
+
+        .cit-library-tabs button {
+          border: 0;
+          border-radius: 999px;
+          padding: 8px 14px;
+          background: transparent;
+          color: #53635b;
+          font: inherit;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .cit-library-tabs button.is-active {
+          background: #123b2d;
+          color: #fff;
+          box-shadow: 0 3px 10px rgba(18, 59, 45, .14);
+        }
+
+        .cit-app--decorated .cit-library-tabs {
+          border-color: rgba(255,255,255,.30);
+          background: rgba(250,246,238,.92);
+          backdrop-filter: blur(14px);
+        }
+
+        .cit-app--decorated .cit-library-tabs button.is-active {
+          background: linear-gradient(180deg, #9c363d, #7f2b31);
+          color: #fff;
+        }
+
+        @media (max-width: 720px) {
+          .cit-library-tabs-wrap {
+            margin: 4px 0 10px;
+          }
+
+          .cit-library-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%;
+            box-sizing: border-box;
+          }
+
+          .cit-library-tabs button {
+            padding: 9px 10px;
+          }
+        }
+
         .cit-mobile-nav {
           display: none;
         }
@@ -2350,10 +2414,11 @@ const saveFavouriteFilm = async (film) => {
               }`}
               onClick={() => {
                 setActiveView("watchlist");
+                setLibraryView("watchlist");
                 setAccountOpen(false);
               }}
             >
-              My Christmas List
+              My Library
             </button>
 
             <button
@@ -2561,16 +2626,69 @@ const saveFavouriteFilm = async (film) => {
             }}
           />
         </section>
+      ) : activeView === "watchlist" ? (
+        <section className="cit-section-anchor">
+          <div className="cit-library-tabs-wrap">
+            <div className="cit-library-tabs" role="tablist" aria-label="My Library">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={libraryView === "watchlist"}
+                className={libraryView === "watchlist" ? "is-active" : ""}
+                onClick={() => setLibraryView("watchlist")}
+              >
+                My Christmas List
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={libraryView === "collections"}
+                className={libraryView === "collections" ? "is-active" : ""}
+                onClick={() => setLibraryView("collections")}
+              >
+                Collections
+              </button>
+            </div>
+          </div>
+
+          {libraryView === "collections" ? (
+            <Collections
+              supabase={supabase}
+              session={session}
+            />
+          ) : (
+            <MyLibrary
+              supabase={supabase}
+              session={session}
+              listType="watchlist"
+              onBrowseDiscover={() => setActiveView("discover")}
+              onWatchlistRemoved={(tmdbId) => {
+                setWatchlistTmdbIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(tmdbId);
+                  return next;
+                });
+
+                setDiscover((prev) => [...prev]);
+              }}
+              onFavouriteRemoved={(tmdbId) => {
+                setFavouriteTmdbIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(tmdbId);
+                  return next;
+                });
+
+                setDiscover((prev) => [...prev]);
+              }}
+            />
+          )}
+        </section>
       ) : (
         <section className="cit-section-anchor">
           <MyLibrary
             supabase={supabase}
             session={session}
-            listType={
-              activeView === "favourites"
-                ? "favourites"
-                : "watchlist"
-            }
+            listType="favourites"
             onBrowseDiscover={() => setActiveView("discover")}
             onWatchlistRemoved={(tmdbId) => {
               setWatchlistTmdbIds((prev) => {
@@ -2614,7 +2732,10 @@ const saveFavouriteFilm = async (film) => {
               ? "cit-mobile-nav-button--active"
               : ""
           }
-          onClick={() => setActiveView("watchlist")}
+          onClick={() => {
+            setActiveView("watchlist");
+            setLibraryView("watchlist");
+          }}
         >
           My List
         </button>
