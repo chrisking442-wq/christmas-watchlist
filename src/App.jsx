@@ -8,6 +8,7 @@ import CatalogueAdmin from "./CatalogueAdmin";
 import WatchedHistory from "./WatchedHistory";
 import SharedList from "./SharedList";
 import Planner from "./Planner";
+import SharedPlanner from "./SharedPlanner";
 
 /* ========= ENV / CLIENTS ========= */
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -2404,12 +2405,19 @@ const saveFavouriteFilm = async (film) => {
 
 export default function App() {
   let shareToken = "";
+  let shareType = "";
 
   try {
     const params = new URLSearchParams(window.location.search);
     shareToken = String(params.get("share") || "").trim();
+    shareType = String(params.get("type") || "").trim().toLowerCase();
   } catch {
     shareToken = "";
+    shareType = "";
+  }
+
+  if (shareToken && shareType === "planner") {
+    return <SharedPlanner supabase={supabase} token={shareToken} />;
   }
 
   if (shareToken) {

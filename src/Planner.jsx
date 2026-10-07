@@ -308,6 +308,12 @@ export default function Planner({
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingEvent, setDeletingEvent] = useState(false);
   const [markingWatchedId, setMarkingWatchedId] = useState("");
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareSaving, setShareSaving] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareRevoking, setShareRevoking] = useState(false);
+  const [shareError, setShareError] = useState("");
 
   async function loadPlanner() {
     if (!supabase || !session?.user) {
@@ -586,6 +592,106 @@ export default function Planner({
     }));
   }
 
+  async function openSharePlanner() {
+    if (!plannerId || !supabase) return;
+
+    setShareOpen(true);
+    setShareError("");
+    setShareCopied(false);
+
+    if (shareUrl) return;
+
+    setShareSaving(true);
+
+    const { data, error: shareRpcError } = await supabase.rpc(
+      "v2_create_or_get_planner_share",
+      { p_planner_id: plannerId }
+    );
+
+    setShareSaving(false);
+
+    if (shareRpcError) {
+      console.error("Couldn't create planner share link:", shareRpcError);
+      setShareError(
+        shareRpcError.message || "Couldn't create a planner share link."
+      );
+      return;
+    }
+
+    if (!data) {
+      setShareError("Couldn't create a planner share link.");
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("share", data);
+    url.searchParams.set("type", "planner");
+
+    setShareUrl(url.toString());
+  }
+
+  async function copyPlannerShareLink() {
+    if (!shareUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      window.prompt("Copy this link:", shareUrl);
+    }
+  }
+
+  async function nativeSharePlanner() {
+    if (!shareUrl || typeof navigator.share !== "function") return;
+
+    try {
+      await navigator.share({
+        title: "My Christmas Planner",
+        text: "Here's my Christmas movie nights planner on Check It Twice.",
+        url: shareUrl,
+      });
+    } catch (shareNativeError) {
+      if (shareNativeError?.name !== "AbortError") {
+        console.warn("Native sharing wasn't available:", shareNativeError);
+      }
+    }
+  }
+
+  async function stopSharingPlanner() {
+    if (!plannerId || !supabase || shareRevoking) return;
+
+    const confirmed = window.confirm(
+      "Stop sharing this planner? Anyone using the current public link will no longer be able to open it."
+    );
+
+    if (!confirmed) return;
+
+    setShareRevoking(true);
+    setShareError("");
+
+    const { error: disableError } = await supabase.rpc(
+      "v2_disable_planner_share",
+      { p_planner_id: plannerId }
+    );
+
+    setShareRevoking(false);
+
+    if (disableError) {
+      console.error("Couldn't stop planner sharing:", disableError);
+      setShareError(
+        disableError.message || "Couldn't stop sharing this planner."
+      );
+      return;
+    }
+
+    setShareUrl("");
+    setShareCopied(false);
+    setShareOpen(false);
+  }
+
   function renderUpcomingCard(event) {
     const watchedAt = watchedByFilm[event.film_id];
     const providers = availabilityByFilm[event.film_id] || [];
@@ -682,9 +788,20 @@ export default function Planner({
           </p>
         </div>
 
-        <div className="cit-planner-stats">
-          <strong>{events.length}</strong>
-          <span>{events.length === 1 ? "movie night" : "movie nights"}</span>
+        <div className="cit-planner-hero-actions">
+          <button
+            type="button"
+            className="cit-planner-share-button"
+            onClick={openSharePlanner}
+            disabled={!plannerId || loading}
+          >
+            ↗ Share planner
+          </button>
+
+          <div className="cit-planner-stats">
+            <strong>{events.length}</strong>
+            <span>{events.length === 1 ? "movie night" : "movie nights"}</span>
+          </div>
         </div>
       </div>
 
@@ -812,6 +929,94 @@ export default function Planner({
         </section>
       )}
 
+      {shareOpen && (
+        <div
+          className="cit-planner-share-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setShareOpen(false);
+            }
+          }}
+        >
+          <div
+            className="cit-planner-share-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cit-planner-share-title"
+          >
+            <h2 id="cit-planner-share-title">Share your Planner</h2>
+            <p>
+              Anyone with this link can view your movie-night schedule. They
+              don't need a Check It Twice account, and the shared planner is
+              read-only.
+            </p>
+
+            {shareSaving ? (
+              <p>Creating your share link…</p>
+            ) : shareError ? (
+              <div className="cit-planner-share-error">{shareError}</div>
+            ) : shareUrl ? (
+              <>
+                <input
+                  className="cit-planner-share-link"
+                  value={shareUrl}
+                  readOnly
+                  aria-label="Public planner share link"
+                  onFocus={(event) => event.target.select()}
+                />
+
+                <div className="cit-planner-share-actions">
+                  <button
+                    type="button"
+                    className="cit-planner-share-primary"
+                    onClick={copyPlannerShareLink}
+                  >
+                    {shareCopied ? "✓ Copied" : "Copy link"}
+                  </button>
+
+                  {typeof navigator.share === "function" && (
+                    <button
+                      type="button"
+                      className="cit-planner-share-secondary"
+                      onClick={nativeSharePlanner}
+                    >
+                      Share…
+                    </button>
+                  )}
+
+                  <a
+                    className="cit-planner-share-secondary"
+                    href={shareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Preview
+                  </a>
+
+                  <button
+                    type="button"
+                    className="cit-planner-share-stop"
+                    onClick={stopSharingPlanner}
+                    disabled={shareRevoking}
+                  >
+                    {shareRevoking ? "Stopping…" : "Stop sharing"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="cit-planner-share-close"
+                    onClick={() => setShareOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {editingEvent && (
         <PlannerEditModal
           event={editingEvent}
@@ -929,6 +1134,139 @@ const plannerStyles = `
     color: #728078;
     font-size: 10px;
     font-weight: 750;
+  }
+
+  .cit-planner-hero-actions {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: stretch;
+    gap: 9px;
+  }
+
+  .cit-planner-share-button {
+    border: 1px solid #123b2d;
+    border-radius: 12px;
+    background: #123b2d;
+    color: #fff;
+    padding: 9px 13px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .cit-planner-share-button:hover:not([disabled]) {
+    background: #0e3024;
+  }
+
+  .cit-planner-share-button[disabled] {
+    cursor: default;
+    opacity: .55;
+  }
+
+  .cit-planner-share-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(15,31,25,.57);
+    backdrop-filter: blur(6px);
+  }
+
+  .cit-planner-share-dialog {
+    width: min(470px, 100%);
+    border: 1px solid #ddd7cd;
+    border-radius: 17px;
+    background: #fbfaf6;
+    padding: 19px;
+    box-shadow: 0 24px 70px rgba(16,34,27,.25);
+  }
+
+  .cit-planner-share-dialog h2 {
+    margin: 0;
+    color: #123b2d;
+    font-size: 22px;
+    letter-spacing: -.025em;
+  }
+
+  .cit-planner-share-dialog p {
+    margin: 7px 0 0;
+    color: #68756f;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .cit-planner-share-link {
+    margin-top: 15px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid #d8d3ca;
+    border-radius: 10px;
+    background: #fff;
+    color: #40574f;
+    padding: 10px 11px;
+    font-size: 11px;
+  }
+
+  .cit-planner-share-error {
+    margin-top: 12px;
+    border: 1px solid #e7c2c2;
+    border-radius: 9px;
+    background: #fff2f2;
+    color: #8b3434;
+    padding: 9px 10px;
+    font-size: 11px;
+  }
+
+  .cit-planner-share-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 13px;
+  }
+
+  .cit-planner-share-actions button,
+  .cit-planner-share-actions a {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    padding: 8px 11px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .cit-planner-share-primary {
+    border: 1px solid #123b2d;
+    background: #123b2d;
+    color: #fff;
+  }
+
+  .cit-planner-share-secondary {
+    border: 1px solid #d8d3ca;
+    background: #fff;
+    color: #365249;
+  }
+
+  .cit-planner-share-stop {
+    border: 1px solid #e2b7b7;
+    background: #fff4f4;
+    color: #8f3535;
+  }
+
+  .cit-planner-share-close {
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: #747e79;
   }
 
   .cit-planner-toolbar {
@@ -1469,6 +1807,15 @@ const plannerStyles = `
       font-size: 12px;
     }
 
+    .cit-planner-hero-actions {
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+
+    .cit-planner-share-button {
+      flex: 1 1 auto;
+    }
+
     .cit-planner-stats {
       width: fit-content;
       min-width: 100px;
@@ -1548,6 +1895,15 @@ const plannerStyles = `
     .cit-planner-edit-form select,
     .cit-planner-edit-form textarea {
       font-size: 16px;
+    }
+
+    .cit-planner-share-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .cit-planner-share-close {
+      margin-left: 0;
     }
 
     .cit-planner-edit-actions {
