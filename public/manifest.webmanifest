@@ -1,0 +1,25 @@
+{
+  "name": "Check It Twice — The Ultimate Christmas Watchlist",
+  "short_name": "Check It Twice",
+  "description": "Build your Christmas watchlist, find where films are streaming in the UK, plan movie nights and share them.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f4ee",
+  "theme_color": "#123b2d",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
