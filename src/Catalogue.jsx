@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import PlannerAddModal from "./PlannerAddModal";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -216,6 +217,7 @@ export default function Catalogue({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedFilm, setSelectedFilm] = useState(null);
+  const [plannerFilm, setPlannerFilm] = useState(null);
   const [filmDetailsByTmdbId, setFilmDetailsByTmdbId] = useState({});
   const [loadingFilmDetails, setLoadingFilmDetails] = useState(new Set());
   const [filmDetailErrors, setFilmDetailErrors] = useState({});
@@ -2201,7 +2203,8 @@ export default function Catalogue({
         }
 
         .cit-detail-primary,
-        .cit-detail-secondary {
+        .cit-detail-secondary,
+        .cit-detail-planner {
           border-radius: 9px;
           padding: 9px 12px;
           cursor: pointer;
@@ -2226,6 +2229,16 @@ export default function Catalogue({
           border: 1px solid #d8d3ca;
           background: #fff;
           color: #40574f;
+        }
+
+        .cit-detail-planner {
+          border: 1px solid #d8c7a8;
+          background: #fffaf0;
+          color: #654a20;
+        }
+
+        .cit-detail-planner:hover {
+          background: #fff3da;
         }
 
         .cit-detail-watched {
@@ -2588,6 +2601,7 @@ export default function Catalogue({
           }
 
           .cit-detail-actions > .cit-detail-secondary,
+          .cit-detail-actions > .cit-detail-planner,
           .cit-detail-actions > div,
           .cit-detail-watched {
             width: 100%;
@@ -2596,6 +2610,7 @@ export default function Catalogue({
 
           .cit-detail-primary,
           .cit-detail-secondary,
+          .cit-detail-planner,
           .cit-detail-watched {
             min-height: 40px;
             padding: 9px 8px;
@@ -3252,6 +3267,16 @@ export default function Catalogue({
                         : "♡ Add to Favourites"}
                     </button>
 
+                    {session?.user && (
+                      <button
+                        type="button"
+                        className="cit-detail-planner"
+                        onClick={() => setPlannerFilm(selectedFilm)}
+                      >
+                        📅 Add to Planner
+                      </button>
+                    )}
+
                     <div>
                       <button
                         type="button"
@@ -3427,6 +3452,15 @@ export default function Catalogue({
           </div>
         );
       })()}
+
+      {plannerFilm && (
+        <PlannerAddModal
+          film={plannerFilm}
+          supabase={supabase}
+          session={session}
+          onClose={() => setPlannerFilm(null)}
+        />
+      )}
     </div>
   );
 }

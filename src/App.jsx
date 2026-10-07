@@ -7,6 +7,7 @@ import Catalogue from "./Catalogue";
 import CatalogueAdmin from "./CatalogueAdmin";
 import WatchedHistory from "./WatchedHistory";
 import SharedList from "./SharedList";
+import Planner from "./Planner";
 
 /* ========= ENV / CLIENTS ========= */
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -1614,7 +1615,7 @@ const saveFavouriteFilm = async (film) => {
             bottom: max(10px, env(safe-area-inset-bottom));
             z-index: 1200;
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 4px;
             padding: 5px;
             border: 1px solid #ded8cf;
@@ -1631,7 +1632,7 @@ const saveFavouriteFilm = async (film) => {
             color: #365047;
             padding: 10px 4px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 720;
             line-height: 1.15;
             transition:
@@ -1692,6 +1693,19 @@ const saveFavouriteFilm = async (film) => {
               }}
             >
               My Christmas List
+            </button>
+
+            <button
+              type="button"
+              className={`cit-nav-button ${
+                activeView === "planner" ? "cit-nav-button--primary" : ""
+              }`}
+              onClick={() => {
+                setActiveView("planner");
+                setAccountOpen(false);
+              }}
+            >
+              Planner
             </button>
 
             <button
@@ -1849,6 +1863,24 @@ const saveFavouriteFilm = async (film) => {
             onBrowseDiscover={() => setActiveView("discover")}
           />
         </section>
+      ) : activeView === "planner" ? (
+        <section className="cit-section-anchor">
+          <Planner
+            supabase={supabase}
+            session={session}
+            onBrowseDiscover={() => setActiveView("discover")}
+            onWatchlistAdded={(tmdbId) => {
+              setWatchlistTmdbIds(
+                (prev) => new Set([...prev, tmdbId])
+              );
+            }}
+            onFavouriteAdded={(tmdbId) => {
+              setFavouriteTmdbIds(
+                (prev) => new Set([...prev, tmdbId])
+              );
+            }}
+          />
+        </section>
       ) : (
         <section className="cit-section-anchor">
           <MyLibrary
@@ -1905,6 +1937,18 @@ const saveFavouriteFilm = async (film) => {
           onClick={() => setActiveView("watchlist")}
         >
           My List
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeView === "planner"
+              ? "cit-mobile-nav-button--active"
+              : ""
+          }
+          onClick={() => setActiveView("planner")}
+        >
+          Planner
         </button>
 
         <button

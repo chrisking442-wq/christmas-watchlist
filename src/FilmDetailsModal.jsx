@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import PlannerAddModal from "./PlannerAddModal";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -171,6 +172,7 @@ export default function FilmDetailsModal({
   const [savingWatchlist, setSavingWatchlist] = useState(false);
   const [savingFavourite, setSavingFavourite] = useState(false);
   const [savingWatched, setSavingWatched] = useState(false);
+  const [showPlannerAdd, setShowPlannerAdd] = useState(false);
 
   useEffect(() => {
     if (!film) return;
@@ -910,6 +912,7 @@ export default function FilmDetailsModal({
 
         .cit-shared-detail-primary,
         .cit-shared-detail-secondary,
+        .cit-shared-detail-planner,
         .cit-shared-detail-watched {
           border-radius: 9px;
           padding: 9px 12px;
@@ -925,6 +928,7 @@ export default function FilmDetailsModal({
 
         .cit-shared-detail-primary:hover:not([disabled]),
         .cit-shared-detail-secondary:hover:not([disabled]),
+        .cit-shared-detail-planner:hover:not([disabled]),
         .cit-shared-detail-watched:hover:not([disabled]) {
           transform: translateY(-1px);
         }
@@ -957,6 +961,16 @@ export default function FilmDetailsModal({
           background: #fff4f5;
           color: #8f2730;
           cursor: default;
+        }
+
+        .cit-shared-detail-planner {
+          border: 1px solid #d8c7a8;
+          background: #fffaf0;
+          color: #654a20;
+        }
+
+        .cit-shared-detail-planner:hover:not([disabled]) {
+          background: #fff3da;
         }
 
         .cit-shared-detail-watched {
@@ -1266,6 +1280,7 @@ export default function FilmDetailsModal({
           }
 
           .cit-shared-detail-actions > .cit-shared-detail-secondary,
+          .cit-shared-detail-actions > .cit-shared-detail-planner,
           .cit-shared-detail-actions > div,
           .cit-shared-detail-watched {
             width: 100%;
@@ -1274,6 +1289,7 @@ export default function FilmDetailsModal({
 
           .cit-shared-detail-primary,
           .cit-shared-detail-secondary,
+          .cit-shared-detail-planner,
           .cit-shared-detail-watched {
             min-height: 40px;
             padding: 9px 8px;
@@ -1459,6 +1475,16 @@ export default function FilmDetailsModal({
                   : "♡ Add to Favourites"}
               </button>
 
+              {session?.user && (
+                <button
+                  type="button"
+                  className="cit-shared-detail-planner"
+                  onClick={() => setShowPlannerAdd(true)}
+                >
+                  📅 Add to Planner
+                </button>
+              )}
+
               <div>
                 <button
                   type="button"
@@ -1611,6 +1637,15 @@ export default function FilmDetailsModal({
           </div>
         </div>
       </div>
+
+      {showPlannerAdd && (
+        <PlannerAddModal
+          film={film}
+          supabase={supabase}
+          session={session}
+          onClose={() => setShowPlannerAdd(false)}
+        />
+      )}
     </div>
   );
 }
