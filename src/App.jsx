@@ -434,6 +434,14 @@ function MainApp() {
     const [activeView, setActiveView] = useState("discover");
     const [accountOpen, setAccountOpen] = useState(false);
     const [showAdminTools, setShowAdminTools] = useState(false);
+    const [decoratedMode, setDecoratedMode] = useState(() => {
+      try {
+        return localStorage.getItem("cit_theme_mode") === "decorated";
+      } catch {
+        return false;
+      }
+    });
+    const [themeTransitioning, setThemeTransitioning] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -483,6 +491,25 @@ function MainApp() {
       cancelled = true;
     };
   }, [session]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "cit_theme_mode",
+        decoratedMode ? "decorated" : "classic"
+      );
+    } catch {}
+
+    if (typeof document !== "undefined") {
+      document.body.classList.toggle("cit-theme-decorated", decoratedMode);
+    }
+
+    return () => {
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("cit-theme-decorated");
+      }
+    };
+  }, [decoratedMode]);
 
 useEffect(() => {
   if (!supabase || !session?.user) {
@@ -1018,6 +1045,29 @@ const saveFavouriteFilm = async (film) => {
   const accountInitial =
     accountName?.trim()?.charAt(0)?.toUpperCase() || "A";
 
+  function toggleThemeMode() {
+    setAccountOpen(false);
+
+    let reduceMotion = false;
+    try {
+      reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+    } catch {}
+
+    if (reduceMotion) {
+      setDecoratedMode((current) => !current);
+      return;
+    }
+
+    setThemeTransitioning(true);
+    setDecoratedMode((current) => !current);
+
+    window.setTimeout(() => {
+      setThemeTransitioning(false);
+    }, 950);
+  }
+
   async function signOutUser() {
     if (!supabase) return;
 
@@ -1030,7 +1080,9 @@ const saveFavouriteFilm = async (film) => {
   /* ====== UI ====== */
   return (
     <div
-      className="cit-app"
+      className={`cit-app ${decoratedMode ? "cit-app--decorated" : ""} ${
+        themeTransitioning ? "cit-theme-transitioning" : ""
+      }`}
       style={{
         padding: "16px 16px 88px",
         maxWidth: 1240,
@@ -1266,6 +1318,47 @@ const saveFavouriteFilm = async (film) => {
           margin: 0 0 18px;
         }
 
+        .cit-theme-toggle {
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          border: 1px solid #d8d3ca;
+          border-radius: 999px;
+          background: #fff;
+          color: #365249;
+          padding: 7px 11px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 800;
+          box-shadow: 0 2px 7px rgba(28, 42, 35, 0.06);
+          transition:
+            transform .16s ease,
+            background .16s ease,
+            border-color .16s ease,
+            color .16s ease,
+            box-shadow .16s ease;
+        }
+
+        .cit-theme-toggle:hover {
+          transform: translateY(-1px);
+          border-color: #b7c1bc;
+          background: #fbfaf7;
+          box-shadow: 0 5px 13px rgba(28, 42, 35, 0.09);
+        }
+
+        .cit-theme-toggle[aria-pressed="true"] {
+          border-color: rgba(144, 47, 51, .30);
+          background: #fff6ef;
+          color: #8d3034;
+        }
+
+        .cit-theme-toggle-icon {
+          font-size: 14px;
+          line-height: 1;
+        }
+
         .cit-account-wrap {
           position: relative;
         }
@@ -1380,69 +1473,44 @@ const saveFavouriteFilm = async (film) => {
           min-height: 132px;
           margin: 18px 0 16px;
           padding: 23px 24px 22px;
-          border: 1px solid #dfe4df;
+          border: 1px solid rgba(205, 182, 131, .40);
           border-radius: 18px;
           background:
-            radial-gradient(
-              circle at 8% 18%,
-              rgba(255,255,255,.92) 0 1.2px,
-              transparent 1.5px
-            ),
-            radial-gradient(
-              circle at 22% 38%,
-              rgba(255,255,255,.74) 0 1px,
-              transparent 1.4px
-            ),
-            radial-gradient(
-              circle at 61% 19%,
-              rgba(255,255,255,.88) 0 1px,
-              transparent 1.4px
-            ),
-            radial-gradient(
-              circle at 84% 31%,
-              rgba(255,255,255,.78) 0 1.3px,
-              transparent 1.7px
-            ),
-            linear-gradient(
-              135deg,
-              #eef3f0 0%,
-              #e7eeeb 43%,
-              #f3f1eb 100%
-            );
-          box-shadow: 0 6px 22px rgba(36, 52, 44, .055);
+            linear-gradient(135deg, #103d2d 0%, #184d39 55%, #782b32 100%);
+          color: #fff;
+          box-shadow: 0 10px 28px rgba(45, 49, 42, .09);
         }
 
         .cit-discover-hero::before {
           content: "";
           position: absolute;
+          inset: 0 0 0 auto;
+          width: 44%;
           z-index: -1;
-          right: -4%;
-          bottom: -78px;
-          width: 58%;
-          height: 165px;
-          border-radius: 50% 48% 0 0;
-          border-top: 1px solid rgba(18,59,45,.08);
-          background:
-            linear-gradient(
-              180deg,
-              rgba(255,255,255,.18),
-              rgba(255,255,255,.46)
-            );
-          transform: rotate(-4deg);
+          pointer-events: none;
+          background-image: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20520%20260%22%3E%0A%20%20%3Cg%20fill=%22%23ffffff%22%20opacity=%22.10%22%3E%0A%20%20%20%20%3Cpath%20d=%22M245%20246%20L320%20112%20L395%20246%20Z%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M194%20246%20L266%20135%20L338%20246%20Z%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M330%20246%20L386%20152%20L442%20246%20Z%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M377%20246%20L424%20166%20L471%20246%20Z%22/%3E%0A%20%20%3C/g%3E%0A%20%20%3Cg%20fill=%22%23ead18f%22%20opacity=%22.58%22%3E%0A%20%20%20%20%3Ccircle%20cx=%22318%22%20cy=%2285%22%20r=%222.5%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22370%22%20cy=%22126%22%20r=%222%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22278%22%20cy=%22150%22%20r=%222.2%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22451%22%20cy=%2292%22%20r=%222%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22410%22%20cy=%2258%22%20r=%221.8%22/%3E%0A%20%20%3C/g%3E%0A%20%20%3Cpath%20d=%22M0%20220%20C105%20176%20184%20203%20282%20181%20C361%20164%20423%20185%20520%20154%20L520%20260%20L0%20260%20Z%22%0A%20%20%20%20%20%20%20%20fill=%22%23ffffff%22%20opacity=%22.10%22/%3E%0A%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right bottom;
+          background-size: contain;
+          opacity: .94;
         }
 
         .cit-discover-hero::after {
           content: "";
           position: absolute;
+          right: 28px;
+          top: 19px;
           z-index: -1;
-          left: -7%;
-          bottom: -112px;
-          width: 64%;
-          height: 165px;
-          border-radius: 50% 52% 0 0;
-          border-top: 1px solid rgba(18,59,45,.055);
-          background: rgba(255,255,255,.2);
-          transform: rotate(4deg);
+          width: 150px;
+          height: 70px;
+          pointer-events: none;
+          opacity: .62;
+          background:
+            radial-gradient(circle at 8% 25%, rgba(255,255,255,.58) 0 1.3px, transparent 2px),
+            radial-gradient(circle at 31% 65%, rgba(255,255,255,.44) 0 1.2px, transparent 2px),
+            radial-gradient(circle at 54% 18%, rgba(255,255,255,.50) 0 1.3px, transparent 2px),
+            radial-gradient(circle at 76% 55%, rgba(255,255,255,.42) 0 1.2px, transparent 2px),
+            radial-gradient(circle at 94% 27%, rgba(255,255,255,.56) 0 1.2px, transparent 2px);
         }
 
         .cit-discover-copy {
@@ -1453,7 +1521,7 @@ const saveFavouriteFilm = async (film) => {
 
         .cit-discover-eyebrow {
           margin-bottom: 7px;
-          color: #8d4b4e;
+          color: #e7c97f;
           font-size: 10px;
           font-weight: 800;
           letter-spacing: .14em;
@@ -1462,7 +1530,7 @@ const saveFavouriteFilm = async (film) => {
 
         .cit-discover-hero h1 {
           margin: 0;
-          color: #123b2d;
+          color: #fff;
           font-size: clamp(27px, 3.9vw, 39px);
           line-height: 1;
           letter-spacing: -0.045em;
@@ -1471,7 +1539,7 @@ const saveFavouriteFilm = async (film) => {
         .cit-discover-hero p {
           max-width: 680px;
           margin: 8px 0 0;
-          color: #586861;
+          color: rgba(255,255,255,.88);
           font-size: 14px;
           line-height: 1.5;
         }
@@ -1532,8 +1600,590 @@ const saveFavouriteFilm = async (film) => {
           padding: 0 10px 10px;
         }
 
+        /* Default premium winter treatment for Planner too. */
+        .cit-planner-hero {
+          position: relative !important;
+          overflow: hidden !important;
+          border-color: rgba(205,182,131,.38) !important;
+          background:
+            linear-gradient(135deg, #103d2d 0%, #184d39 55%, #782b32 100%) !important;
+          color: #fff !important;
+          box-shadow: 0 10px 28px rgba(45,49,42,.09) !important;
+        }
+
+        .cit-planner-hero::before {
+          content: "" !important;
+          position: absolute !important;
+          right: 16px !important;
+          bottom: -22px !important;
+          width: 270px !important;
+          height: 145px !important;
+          pointer-events: none !important;
+          background-image: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20520%20260%22%3E%0A%20%20%3Cg%20fill=%22%23ffffff%22%20opacity=%22.10%22%3E%0A%20%20%20%20%3Cpath%20d=%22M245%20246%20L320%20112%20L395%20246%20Z%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M194%20246%20L266%20135%20L338%20246%20Z%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M330%20246%20L386%20152%20L442%20246%20Z%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M377%20246%20L424%20166%20L471%20246%20Z%22/%3E%0A%20%20%3C/g%3E%0A%20%20%3Cg%20fill=%22%23ead18f%22%20opacity=%22.58%22%3E%0A%20%20%20%20%3Ccircle%20cx=%22318%22%20cy=%2285%22%20r=%222.5%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22370%22%20cy=%22126%22%20r=%222%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22278%22%20cy=%22150%22%20r=%222.2%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22451%22%20cy=%2292%22%20r=%222%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22410%22%20cy=%2258%22%20r=%221.8%22/%3E%0A%20%20%3C/g%3E%0A%20%20%3Cpath%20d=%22M0%20220%20C105%20176%20184%20203%20282%20181%20C361%20164%20423%20185%20520%20154%20L520%20260%20L0%20260%20Z%22%0A%20%20%20%20%20%20%20%20fill=%22%23ffffff%22%20opacity=%22.10%22/%3E%0A%3C/svg%3E") !important;
+          background-repeat: no-repeat !important;
+          background-position: right bottom !important;
+          background-size: contain !important;
+          opacity: .78 !important;
+        }
+
+        .cit-planner-hero h1,
+        .cit-planner-hero p {
+          position: relative;
+          z-index: 1;
+          color: #fff !important;
+        }
+
+        .cit-planner-eyebrow {
+          position: relative;
+          z-index: 1;
+          color: #e7c97f !important;
+        }
+
+        /* ====== FULL CHRISTMAS SCENE MODE ====== */
+        .cit-app--decorated {
+          position: relative;
+          isolation: isolate;
+        }
+
+        .cit-app--decorated > *:not(.cit-christmas-scene):not(.cit-theme-transition-overlay):not(.cit-mobile-nav) {
+          position: relative;
+          z-index: 2;
+        }
+
+        /* The mobile nav must stay fixed above the Christmas scene.
+           Do not let the decorated-mode stacking rule turn it into
+           an ordinary in-flow element. */
+        .cit-app--decorated > .cit-mobile-nav {
+          position: fixed !important;
+          z-index: 6000 !important;
+        }
+
+        body.cit-theme-decorated {
+          background: #0c2527;
+        }
+
+        .cit-christmas-scene {
+          position: fixed;
+          inset: 0;
+          z-index: 0;
+          overflow: hidden;
+          pointer-events: none;
+          background:
+            linear-gradient(180deg, rgba(4,18,28,.08), rgba(5,28,25,.10)),
+            url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%201600%20900%22%3E%0A%20%20%3Cdefs%3E%0A%20%20%20%20%3ClinearGradient%20id=%22sky%22%20x1=%220%22%20y1=%220%22%20x2=%220%22%20y2=%221%22%3E%0A%20%20%20%20%20%20%3Cstop%20offset=%220%22%20stop-color=%22%230b2230%22/%3E%0A%20%20%20%20%20%20%3Cstop%20offset=%22.58%22%20stop-color=%22%2312372f%22/%3E%0A%20%20%20%20%20%20%3Cstop%20offset=%221%22%20stop-color=%22%231b3b32%22/%3E%0A%20%20%20%20%3C/linearGradient%3E%0A%20%20%20%20%3ClinearGradient%20id=%22snow%22%20x1=%220%22%20y1=%220%22%20x2=%220%22%20y2=%221%22%3E%0A%20%20%20%20%20%20%3Cstop%20offset=%220%22%20stop-color=%22%23f5f1e8%22/%3E%0A%20%20%20%20%20%20%3Cstop%20offset=%221%22%20stop-color=%22%23dce8e5%22/%3E%0A%20%20%20%20%3C/linearGradient%3E%0A%20%20%3C/defs%3E%0A%0A%20%20%3Crect%20width=%221600%22%20height=%22900%22%20fill=%22url(%23sky)%22/%3E%0A%0A%20%20%3Ccircle%20cx=%221265%22%20cy=%22135%22%20r=%2278%22%20fill=%22%23f4dfaa%22%20opacity=%22.82%22/%3E%0A%20%20%3Ccircle%20cx=%221290%22%20cy=%22116%22%20r=%2278%22%20fill=%22%230d2930%22%20opacity=%22.92%22/%3E%0A%0A%20%20%3Cg%20fill=%22%23d8c581%22%20opacity=%22.55%22%3E%0A%20%20%20%20%3Ccircle%20cx=%22120%22%20cy=%22115%22%20r=%222%22/%3E%3Ccircle%20cx=%22255%22%20cy=%2282%22%20r=%222%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22430%22%20cy=%22144%22%20r=%222%22/%3E%3Ccircle%20cx=%22610%22%20cy=%2296%22%20r=%222%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22820%22%20cy=%22128%22%20r=%222%22/%3E%3Ccircle%20cx=%221010%22%20cy=%2273%22%20r=%222%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%221410%22%20cy=%22175%22%20r=%222%22/%3E%3Ccircle%20cx=%221510%22%20cy=%2286%22%20r=%222%22/%3E%0A%20%20%3C/g%3E%0A%0A%20%20%3Cpath%20d=%22M0%20648%20C220%20580%20410%20615%20615%20570%20C835%20522%201055%20625%201260%20561%20C1390%20520%201490%20545%201600%20525%20L1600%20900%20L0%20900%20Z%22%0A%20%20%20%20%20%20%20%20fill=%22url(%23snow)%22/%3E%0A%20%20%3Cpath%20d=%22M0%20720%20C240%20660%20445%20706%20680%20650%20C945%20587%201160%20708%201600%20622%20L1600%20900%20L0%20900%20Z%22%0A%20%20%20%20%20%20%20%20fill=%22%23eef2ec%22%20opacity=%22.92%22/%3E%0A%0A%20%20%3C%21--%20Pines%20--%3E%0A%20%20%3Cg%20fill=%22%230b2d24%22%3E%0A%20%20%20%20%3Cpath%20d=%22M105%20660%20l55-120%2055%20120z%22/%3E%3Crect%20x=%22155%22%20y=%22655%22%20width=%2210%22%20height=%2244%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M182%20690%20l70-150%2070%20150z%22/%3E%3Crect%20x=%22247%22%20y=%22684%22%20width=%2210%22%20height=%2250%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M1310%20675%20l62-132%2062%20132z%22/%3E%3Crect%20x=%221367%22%20y=%22670%22%20width=%2210%22%20height=%2248%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M1412%20700%20l78-164%2078%20164z%22/%3E%3Crect%20x=%221485%22%20y=%22692%22%20width=%2211%22%20height=%2254%22/%3E%0A%20%20%3C/g%3E%0A%20%20%3Cg%20fill=%22%23174837%22%3E%0A%20%20%20%20%3Cpath%20d=%22M50%20690%20l48-102%2048%20102z%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M326%20690%20l50-110%2050%20110z%22/%3E%0A%20%20%20%20%3Cpath%20d=%22M1220%20695%20l51-112%2051%20112z%22/%3E%0A%20%20%3C/g%3E%0A%0A%20%20%3C%21--%20Houses%20--%3E%0A%20%20%3Cg%20stroke=%22%23d8e1da%22%20stroke-width=%224%22%3E%0A%20%20%20%20%3Cg%3E%0A%20%20%20%20%20%20%3Crect%20x=%22425%22%20y=%22562%22%20width=%22190%22%20height=%22142%22%20rx=%226%22%20fill=%22%237d3134%22/%3E%0A%20%20%20%20%20%20%3Cpath%20d=%22M396%20575%20L520%20477%20L644%20575%20Z%22%20fill=%22%23123b2d%22/%3E%0A%20%20%20%20%20%20%3Cpath%20d=%22M413%20562%20L520%20490%20L625%20562%20Z%22%20fill=%22%23f4f0e7%22%20opacity=%22.95%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%22497%22%20y=%22620%22%20width=%2244%22%20height=%2284%22%20fill=%22%233a2d2c%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%22448%22%20y=%22603%22%20width=%2234%22%20height=%2230%22%20fill=%22%23f7d47d%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%22557%22%20y=%22603%22%20width=%2234%22%20height=%2230%22%20fill=%22%23f7d47d%22/%3E%0A%20%20%20%20%3C/g%3E%0A%20%20%20%20%3Cg%3E%0A%20%20%20%20%20%20%3Crect%20x=%22686%22%20y=%22528%22%20width=%22220%22%20height=%22176%22%20rx=%226%22%20fill=%22%23ddd3c1%22/%3E%0A%20%20%20%20%20%20%3Cpath%20d=%22M652%20542%20L796%20426%20L940%20542%20Z%22%20fill=%22%238d3035%22/%3E%0A%20%20%20%20%20%20%3Cpath%20d=%22M670%20528%20L796%20441%20L921%20528%20Z%22%20fill=%22%23f6f3eb%22%20opacity=%22.98%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%22780%22%20y=%22604%22%20width=%2242%22%20height=%22100%22%20fill=%22%235a463b%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%22716%22%20y=%22574%22%20width=%2236%22%20height=%2232%22%20fill=%22%23f5d173%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%22850%22%20y=%22574%22%20width=%2236%22%20height=%2232%22%20fill=%22%23f5d173%22/%3E%0A%20%20%20%20%3C/g%3E%0A%20%20%20%20%3Cg%3E%0A%20%20%20%20%20%20%3Crect%20x=%22970%22%20y=%22575%22%20width=%22165%22%20height=%22130%22%20rx=%226%22%20fill=%22%231b503b%22/%3E%0A%20%20%20%20%20%20%3Cpath%20d=%22M944%20586%20L1052%20497%20L1160%20586%20Z%22%20fill=%22%23772c31%22/%3E%0A%20%20%20%20%20%20%3Cpath%20d=%22M960%20574%20L1052%20510%20L1145%20574%20Z%22%20fill=%22%23f4f1e9%22%20opacity=%22.96%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%221033%22%20y=%22631%22%20width=%2240%22%20height=%2274%22%20fill=%22%234b382f%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%22991%22%20y=%22610%22%20width=%2229%22%20height=%2228%22%20fill=%22%23f5d173%22/%3E%0A%20%20%20%20%20%20%3Crect%20x=%221086%22%20y=%22610%22%20width=%2229%22%20height=%2228%22%20fill=%22%23f5d173%22/%3E%0A%20%20%20%20%3C/g%3E%0A%20%20%3C/g%3E%0A%0A%20%20%3C%21--%20Fairy%20lights%20--%3E%0A%20%20%3Cpath%20d=%22M340%20430%20C560%20380%20770%20448%20995%20388%20C1120%20355%201230%20370%201350%20338%22%0A%20%20%20%20%20%20%20%20fill=%22none%22%20stroke=%22%23765c2d%22%20stroke-width=%223%22%20opacity=%22.7%22/%3E%0A%20%20%3Cg%3E%0A%20%20%20%20%3Ccircle%20cx=%22420%22%20cy=%22414%22%20r=%227%22%20fill=%22%23d84a4d%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22550%22%20cy=%22401%22%20r=%227%22%20fill=%22%23f0c15b%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22695%22%20cy=%22416%22%20r=%227%22%20fill=%22%23f7e2a0%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22835%22%20cy=%22409%22%20r=%227%22%20fill=%22%23d84a4d%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%22978%22%20cy=%22391%22%20r=%227%22%20fill=%22%23f0c15b%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%221110%22%20cy=%22368%22%20r=%227%22%20fill=%22%23f7e2a0%22/%3E%0A%20%20%20%20%3Ccircle%20cx=%221250%22%20cy=%22357%22%20r=%227%22%20fill=%22%23d84a4d%22/%3E%0A%20%20%3C/g%3E%0A%0A%20%20%3C%21--%20Foreground%20snow%20banks%20--%3E%0A%20%20%3Cpath%20d=%22M0%20815%20C235%20770%20415%20815%20660%20775%20C920%20732%201170%20818%201600%20760%20L1600%20900%20L0%20900%20Z%22%0A%20%20%20%20%20%20%20%20fill=%22%23ffffff%22%20opacity=%22.93%22/%3E%0A%3C/svg%3E") center bottom / cover no-repeat;
+        }
+
+        .cit-christmas-scene::before,
+        .cit-christmas-scene::after {
+          content: "";
+          position: absolute;
+          inset: -12% -8% 0;
+          pointer-events: none;
+          background-image:
+            radial-gradient(circle, rgba(255,255,255,.96) 0 1.2px, transparent 1.8px),
+            radial-gradient(circle, rgba(255,255,255,.76) 0 1px, transparent 1.55px),
+            radial-gradient(circle, rgba(255,255,255,.60) 0 1.35px, transparent 1.95px);
+          background-size: 78px 78px, 112px 112px, 154px 154px;
+          background-position: 8px 12px, 36px 5px, 62px 48px;
+          opacity: .70;
+          animation: citSnowFall 15s linear infinite;
+        }
+
+        .cit-christmas-scene::after {
+          opacity: .38;
+          transform: scale(1.12);
+          animation-duration: 24s;
+          animation-direction: reverse;
+          filter: blur(.25px);
+        }
+
+        .cit-scene-glow {
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at 8% 18%, rgba(159,53,58,.22), transparent 20%),
+            radial-gradient(circle at 91% 16%, rgba(233,194,105,.14), transparent 19%),
+            radial-gradient(circle at 50% 100%, rgba(255,244,210,.09), transparent 31%);
+        }
+
+        @keyframes citSnowFall {
+          from {
+            background-position: 8px -120px, 36px -45px, 62px -200px;
+          }
+          to {
+            background-position: 28px 900px, 8px 1020px, 95px 820px;
+          }
+        }
+
+        .cit-theme-transition-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 9000;
+          pointer-events: none;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 20% 35%, rgba(255,255,255,.88) 0 2px, transparent 3px),
+            radial-gradient(circle at 73% 28%, rgba(244,211,125,.90) 0 2px, transparent 3px),
+            radial-gradient(circle at 48% 60%, rgba(255,255,255,.78) 0 2.5px, transparent 3.5px),
+            radial-gradient(circle at 86% 73%, rgba(244,211,125,.78) 0 2px, transparent 3px),
+            radial-gradient(circle at 32% 82%, rgba(255,255,255,.80) 0 2px, transparent 3px),
+            rgba(11, 42, 34, .14);
+          backdrop-filter: blur(3px);
+          animation: citChristmasTransform .95s ease both;
+        }
+
+        .cit-theme-transition-overlay::before {
+          content: "✦  ✧  ✦  ✧  ✦";
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          color: rgba(255,245,211,.95);
+          font-size: clamp(24px, 5vw, 48px);
+          letter-spacing: .28em;
+          transform: translate(-50%, -50%);
+          text-shadow:
+            0 0 12px rgba(255,232,164,.72),
+            0 0 28px rgba(255,255,255,.42);
+          animation: citSparkleBurst .95s ease both;
+        }
+
+        @keyframes citChristmasTransform {
+          0% { opacity: 0; }
+          22% { opacity: 1; }
+          55% { opacity: .90; }
+          100% { opacity: 0; }
+        }
+
+        @keyframes citSparkleBurst {
+          0% {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(.55) rotate(-8deg);
+          }
+          36% {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1.08) rotate(2deg);
+          }
+          100% {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(1.42) rotate(7deg);
+          }
+        }
+
+        /* Frosted header floating over the Christmas scene. */
+        .cit-app--decorated .cit-header {
+          margin-top: 4px;
+          padding: 10px 14px 12px;
+          border: 1px solid rgba(255,255,255,.30);
+          border-radius: 16px;
+          background: rgba(249, 245, 236, .93);
+          box-shadow:
+            0 14px 38px rgba(0, 19, 16, .18),
+            inset 0 1px 0 rgba(255,255,255,.78);
+          backdrop-filter: blur(18px);
+        }
+
+        .cit-app--decorated .cit-header::before,
+        .cit-app--decorated .cit-header::after {
+          content: none;
+        }
+
+        .cit-app--decorated .cit-desktop-nav {
+          border-color: rgba(96, 73, 51, .14);
+          background: rgba(255,253,248,.88);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+        }
+
+        .cit-app--decorated .cit-nav-button--primary {
+          background: linear-gradient(180deg, #a0383f, #822b31);
+          color: #fff;
+          box-shadow: 0 5px 14px rgba(125, 37, 43, .22);
+        }
+
+        .cit-app--decorated .cit-nav-button--primary:hover {
+          background: #7b272d;
+        }
+
+        .cit-app--decorated .cit-theme-toggle {
+          border-color: rgba(160, 118, 54, .30);
+          background: linear-gradient(180deg, #fff8e9, #faecd0);
+          color: #7c2b31;
+          box-shadow:
+            0 4px 14px rgba(83,54,27,.10),
+            inset 0 1px 0 rgba(255,255,255,.80);
+        }
+
+        .cit-app--decorated .cit-account-button {
+          border-color: rgba(79, 90, 75, .18);
+          background: rgba(255,253,248,.92);
+        }
+
+        /* Default hero remains premium; decorated mode adds a soft seasonal glow. */
+        .cit-app--decorated .cit-discover-hero,
+        .cit-app--decorated .cit-planner-hero {
+          border-color: rgba(235, 207, 139, .42) !important;
+          box-shadow:
+            0 16px 38px rgba(3, 24, 19, .20),
+            inset 0 1px 0 rgba(255,255,255,.08) !important;
+        }
+
+        .cit-app--decorated .cit-discover-hero {
+          background:
+            radial-gradient(circle at 15% 20%, rgba(198,160,77,.08), transparent 24%),
+            linear-gradient(135deg, #0d392a 0%, #184d39 53%, #812d34 100%) !important;
+        }
+
+        .cit-app--decorated .cit-planner-hero {
+          background:
+            radial-gradient(circle at 12% 22%, rgba(198,160,77,.08), transparent 24%),
+            linear-gradient(135deg, #0d392a 0%, #184d39 55%, #812d34 100%) !important;
+        }
+
+        .cit-app--decorated .cit-discover-eyebrow,
+        .cit-app--decorated .cit-planner-eyebrow {
+          color: #efd592 !important;
+        }
+
+        .cit-app--decorated .cit-planner-stats {
+          border-color: rgba(255,255,255,.25) !important;
+          background: rgba(255,251,242,.94) !important;
+        }
+
+        .cit-app--decorated .cit-planner-share-button {
+          border-color: rgba(255,255,255,.38) !important;
+          background: rgba(255,250,239,.94) !important;
+          color: #7d2c32 !important;
+        }
+
+        /* Big frosted content surfaces make the whole app feel like a scene,
+           without putting decorations on every individual poster. */
+        .cit-app--decorated .cit-catalogue,
+        .cit-app--decorated .cit-library-view,
+        .cit-app--decorated .cit-watched-view,
+        .cit-app--decorated .cit-planner-page {
+          border: 1px solid rgba(255,255,255,.34) !important;
+          border-radius: 20px !important;
+          background: rgba(248, 244, 236, .91) !important;
+          box-shadow:
+            0 18px 48px rgba(0, 24, 20, .18),
+            inset 0 1px 0 rgba(255,255,255,.74) !important;
+          backdrop-filter: blur(16px);
+        }
+
+        .cit-app--decorated .cit-catalogue {
+          padding: 16px 16px 22px;
+        }
+
+        .cit-app--decorated .cit-library-view,
+        .cit-app--decorated .cit-watched-view {
+          padding: 16px !important;
+        }
+
+        .cit-app--decorated .cit-planner-page {
+          padding: 16px !important;
+        }
+
+        .cit-app--decorated .cit-catalogue-search,
+        .cit-app--decorated .cit-decade-select,
+        .cit-app--decorated .cit-sort-select {
+          border-color: rgba(107, 91, 68, .18) !important;
+          background: rgba(255,253,248,.94) !important;
+          box-shadow: 0 3px 10px rgba(77,57,35,.05);
+        }
+
+        .cit-app--decorated .cit-filter-chip {
+          border-color: rgba(107, 91, 68, .16) !important;
+          background: rgba(255,253,248,.90) !important;
+        }
+
+        .cit-app--decorated .cit-filter-chip--active {
+          border-color: #8b3036 !important;
+          background: #8b3036 !important;
+          color: #fff !important;
+        }
+
+        .cit-app--decorated .cit-library-header,
+        .cit-app--decorated .cit-watched-header {
+          border-radius: 14px;
+          background:
+            linear-gradient(90deg, rgba(20,73,51,.065), rgba(144,47,52,.055)) !important;
+        }
+
+        .cit-app--decorated .cit-shelf-heading::after,
+        .cit-app--decorated .cit-all-films-heading::after,
+        .cit-app--decorated .cit-library-header::after {
+          content: "";
+          display: inline-block;
+          width: 36px;
+          height: 2px;
+          margin-left: 9px;
+          border-radius: 999px;
+          vertical-align: middle;
+          background: linear-gradient(90deg, #99343a, #d1a856 48%, #184a36);
+          opacity: .84;
+        }
+
+        .cit-app--decorated .cit-film-card,
+        .cit-app--decorated .cit-shelf-card,
+        .cit-app--decorated .cit-library-card,
+        .cit-app--decorated .cit-watched-card,
+        .cit-app--decorated .cit-planner-upcoming-card,
+        .cit-app--decorated .cit-planner-calendar-wrap {
+          border-color: rgba(98, 81, 59, .15) !important;
+          background: rgba(255,253,249,.95) !important;
+          box-shadow: 0 7px 20px rgba(53,40,27,.055) !important;
+        }
+
+        .cit-app--decorated .cit-film-card:hover,
+        .cit-app--decorated .cit-shelf-card:hover {
+          border-color: rgba(139,48,54,.22) !important;
+          box-shadow: 0 11px 26px rgba(60,42,28,.085) !important;
+        }
+
+        .cit-app--decorated .cit-provider-badge,
+        .cit-app--decorated .cit-library-provider,
+        .cit-app--decorated .cit-planner-provider {
+          background: rgba(249,246,239,.96) !important;
+          border-color: rgba(112,94,65,.16) !important;
+        }
+
+        .cit-app--decorated .cit-planner-view-switch {
+          border-color: rgba(111, 89, 61, .16) !important;
+          background: rgba(240, 232, 219, .90) !important;
+        }
+
+        .cit-app--decorated .cit-planner-view-switch button.is-active {
+          color: #7e2c32 !important;
+          background: #fffaf1 !important;
+        }
+
+        .cit-app--decorated .cit-planner-calendar-cell.has-events {
+          background:
+            linear-gradient(180deg, rgba(248,237,214,.80), rgba(255,253,249,1) 47%) !important;
+        }
+
+        .cit-app--decorated .cit-planner-calendar-event {
+          border-color: rgba(147, 78, 62, .17) !important;
+          background: #fff9f1 !important;
+        }
+
+        .cit-app--decorated .cit-detail-planner,
+        .cit-app--decorated .cit-shared-detail-planner {
+          border-color: rgba(177,134,63,.34) !important;
+          background: #fff5df !important;
+          color: #694918 !important;
+        }
+
+        .cit-app--decorated .cit-admin-panel,
+        .cit-app--decorated .cit-admin {
+          border-color: rgba(255,255,255,.28) !important;
+          background: rgba(248,244,236,.92) !important;
+          box-shadow: 0 13px 32px rgba(0,24,20,.13);
+          backdrop-filter: blur(14px);
+        }
+
+        .cit-app--decorated .cit-mobile-nav {
+          border: 1px solid rgba(255,255,255,.30);
+          background: rgba(250,246,238,.94);
+          box-shadow: 0 -8px 28px rgba(0,24,20,.17);
+          backdrop-filter: blur(16px);
+        }
+
+        .cit-app--decorated .cit-mobile-nav-button--active {
+          background: linear-gradient(180deg, #9c363d, #7f2b31) !important;
+          color: #fff !important;
+          box-shadow: 0 4px 12px rgba(125,37,43,.18) !important;
+        }
+
+        @media (max-width: 720px) {
+          .cit-theme-label {
+            display: none;
+          }
+
+          .cit-theme-toggle {
+            width: 36px;
+            height: 36px;
+            min-height: 36px;
+            padding: 0;
+          }
+
+          .cit-app--decorated .cit-header {
+            padding-left: 10px;
+            padding-right: 10px;
+          }
+
+          .cit-app--decorated .cit-catalogue,
+          .cit-app--decorated .cit-library-view,
+          .cit-app--decorated .cit-watched-view,
+          .cit-app--decorated .cit-planner-page {
+            border-radius: 15px !important;
+          }
+
+          .cit-app--decorated .cit-catalogue {
+            padding: 12px 11px 18px;
+          }
+
+          .cit-app--decorated .cit-library-view,
+          .cit-app--decorated .cit-watched-view,
+          .cit-app--decorated .cit-planner-page {
+            padding: 12px !important;
+          }
+
+          .cit-christmas-scene {
+            background-position: 58% bottom;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .cit-christmas-scene::before,
+          .cit-christmas-scene::after,
+          .cit-theme-transition-overlay,
+          .cit-theme-transition-overlay::before {
+            animation: none !important;
+          }
+        }
+
         .cit-mobile-nav {
           display: none;
+        }
+
+        /* ====== MOBILE LAYOUT STABILITY ======
+           Keep the festive reskin, but stop the header/hero from fighting
+           for horizontal space on real phone widths. */
+        @media (max-width: 720px) {
+          .cit-app {
+            overflow-x: clip;
+          }
+
+          .cit-header {
+            width: 100%;
+            box-sizing: border-box;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .cit-logo-button {
+            min-width: 0;
+            flex: 1 1 auto;
+            max-width: calc(100% - 82px);
+          }
+
+          .cit-header-logo-image {
+            width: 100%;
+            max-width: 268px;
+            height: auto;
+          }
+
+          .cit-header-actions {
+            flex: 0 0 auto;
+            gap: 5px;
+          }
+
+          .cit-theme-toggle,
+          .cit-account-button {
+            flex: 0 0 34px;
+            width: 34px;
+            height: 34px;
+            min-height: 34px;
+          }
+
+          .cit-theme-toggle {
+            padding: 0;
+          }
+
+          .cit-app--decorated .cit-header {
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 0;
+            padding: 8px 8px 10px;
+            border-radius: 14px;
+          }
+
+          .cit-discover-hero {
+            position: relative;
+            box-sizing: border-box;
+            width: 100%;
+          }
+
+          .cit-discover-copy {
+            position: relative;
+            z-index: 3;
+            max-width: 100%;
+          }
+
+          .cit-discover-hero::before {
+            left: auto;
+            right: -10%;
+            bottom: -18px;
+            width: 68%;
+            opacity: .58;
+          }
+
+          .cit-discover-hero::after {
+            left: auto;
+            right: 12px;
+            top: 12px;
+            width: 105px;
+            height: 54px;
+            opacity: .42;
+          }
+
+          .cit-app--decorated .cit-discover-hero::before {
+            left: auto !important;
+            right: -9% !important;
+            width: 68% !important;
+            opacity: .54 !important;
+          }
+
+          .cit-app--decorated .cit-discover-hero::after {
+            left: auto !important;
+            right: 12px !important;
+            width: 105px !important;
+            opacity: .40 !important;
+          }
+
+          .cit-app--decorated .cit-catalogue,
+          .cit-app--decorated .cit-library-view,
+          .cit-app--decorated .cit-watched-view,
+          .cit-app--decorated .cit-planner-page {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+          }
+
+          .cit-app--decorated .cit-catalogue {
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+          }
+
+          .cit-christmas-scene {
+            background-position: 56% bottom;
+          }
+
+          .cit-mobile-nav {
+            box-sizing: border-box;
+            max-width: calc(100vw - 20px);
+          }
+        }
+
+        @media (max-width: 420px) {
+          .cit-header-logo-image {
+            max-width: 252px;
+          }
+
+          .cit-logo-button {
+            max-width: calc(100% - 80px);
+          }
+
+          .cit-discover-hero {
+            padding-left: 16px;
+            padding-right: 16px;
+          }
+
+          .cit-discover-hero h1 {
+            font-size: 28px;
+          }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -1654,6 +2304,16 @@ const saveFavouriteFilm = async (film) => {
         }
       `}</style>
 
+      {decoratedMode && (
+        <div className="cit-christmas-scene" aria-hidden="true">
+          <div className="cit-scene-glow" />
+        </div>
+      )}
+
+      {themeTransitioning && (
+        <div className="cit-theme-transition-overlay" aria-hidden="true" />
+      )}
+
       <header className="cit-header">
         <button
           type="button"
@@ -1735,6 +2395,25 @@ const saveFavouriteFilm = async (film) => {
               Watched
             </button>
           </nav>
+
+          <button
+            type="button"
+            className="cit-theme-toggle"
+            aria-pressed={decoratedMode}
+            onClick={toggleThemeMode}
+            title={
+              decoratedMode
+                ? "Switch to Classic mode"
+                : "Decorate for Christmas"
+            }
+          >
+            <span className="cit-theme-toggle-icon" aria-hidden="true">
+              {decoratedMode ? "✨" : "🎄"}
+            </span>
+            <span className="cit-theme-label">
+              {decoratedMode ? "Classic" : "Decorate"}
+            </span>
+          </button>
 
           {session?.user && (
             <div className="cit-account-wrap">
