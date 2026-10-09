@@ -22,6 +22,13 @@ export default function Collections({ supabase, session }) {
   const [notice, setNotice] = useState("");
   const [detailFilm, setDetailFilm] = useState(null);
 
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareSaving, setShareSaving] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareRevoking, setShareRevoking] = useState(false);
+  const [shareError, setShareError] = useState("");
+
   useEffect(() => {
     loadCollections();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -59,6 +66,10 @@ export default function Collections({ supabase, session }) {
     if (!collection?.id) return;
 
     setSelected(collection);
+    setShareOpen(false);
+    setShareUrl("");
+    setShareCopied(false);
+    setShareError("");
     setItemsLoading(true);
     setError("");
 
@@ -237,6 +248,107 @@ export default function Collections({ supabase, session }) {
     );
   }
 
+  async function openSharePanel() {
+    if (!selected?.id || !supabase) return;
+
+    setShareOpen(true);
+    setShareError("");
+    setShareCopied(false);
+
+    if (shareUrl) return;
+
+    setShareSaving(true);
+
+    const { data, error: shareRpcError } = await supabase.rpc(
+      "v2_create_or_get_list_share",
+      { p_list_id: selected.id }
+    );
+
+    setShareSaving(false);
+
+    if (shareRpcError) {
+      console.error("Couldn't create collection share link:", shareRpcError);
+      setShareError(
+        shareRpcError.message || "Couldn't create a share link."
+      );
+      return;
+    }
+
+    if (!data) {
+      setShareError("Couldn't create a share link.");
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("share", data);
+
+    setShareUrl(url.toString());
+  }
+
+  async function copyShareLink() {
+    if (!shareUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      window.prompt("Copy this link:", shareUrl);
+    }
+  }
+
+  async function nativeShareCollection() {
+    if (!shareUrl || typeof navigator.share !== "function") return;
+
+    try {
+      await navigator.share({
+        title: selected?.name || "Christmas collection",
+        text: `Here's my ${
+          selected?.name || "Christmas collection"
+        } on Check It Twice.`,
+        url: shareUrl,
+      });
+    } catch (shareNativeError) {
+      if (shareNativeError?.name !== "AbortError") {
+        console.warn("Native sharing wasn't available:", shareNativeError);
+      }
+    }
+  }
+
+  async function stopSharingCollection() {
+    if (!selected?.id || !supabase || shareRevoking) return;
+
+    const confirmed = window.confirm(
+      "Stop sharing this collection? Anyone using the current public link will no longer be able to open it."
+    );
+
+    if (!confirmed) return;
+
+    setShareRevoking(true);
+    setShareError("");
+
+    const { error: disableError } = await supabase.rpc(
+      "v2_disable_list_share",
+      { p_list_id: selected.id }
+    );
+
+    setShareRevoking(false);
+
+    if (disableError) {
+      console.error("Couldn't stop sharing collection:", disableError);
+      setShareError(
+        disableError.message || "Couldn't stop sharing this collection."
+      );
+      return;
+    }
+
+    setShareUrl("");
+    setShareCopied(false);
+    setShareOpen(false);
+  }
+
   const selectedCount = useMemo(
     () => Number(selected?.item_count || items.length || 0),
     [selected, items.length]
@@ -342,6 +454,12 @@ export default function Collections({ supabase, session }) {
 
             <div className="cit-collection-actions">
               <button
+                className="cit-collections-share"
+                onClick={openSharePanel}
+              >
+                ↗ Share
+              </button>
+              <button
                 onClick={() => {
                   setRenameValue(selected.name || "");
                   setShowRename(true);
@@ -430,6 +548,98 @@ export default function Collections({ supabase, session }) {
             </div>
           )}
         </>
+      )}
+
+      {shareOpen && selected && (
+        <div
+          className="cit-collections-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setShareOpen(false);
+            }
+          }}
+        >
+          <div
+            className="cit-collections-modal cit-collections-share-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cit-collection-share-title"
+          >
+            <div className="cit-collections-modal-top">
+              <div>
+                <div className="cit-collections-eyebrow">SHARE COLLECTION</div>
+                <h2 id="cit-collection-share-title">{selected.name}</h2>
+              </div>
+              <button
+                type="button"
+                className="cit-collections-close"
+                onClick={() => setShareOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="cit-collections-share-copy">
+              Anyone with this link can view the collection. They don't need
+              a Check It Twice account, and the shared page is read-only.
+            </p>
+
+            {shareSaving ? (
+              <p className="cit-collections-share-copy">
+                Creating your share link…
+              </p>
+            ) : shareError ? (
+              <div className="cit-collections-error">{shareError}</div>
+            ) : shareUrl ? (
+              <>
+                <input
+                  className="cit-collections-share-link"
+                  value={shareUrl}
+                  readOnly
+                  aria-label="Public collection share link"
+                  onFocus={(event) => event.target.select()}
+                />
+
+                <div className="cit-collections-share-actions">
+                  <button
+                    type="button"
+                    className="cit-collections-primary"
+                    onClick={copyShareLink}
+                  >
+                    {shareCopied ? "✓ Copied" : "Copy link"}
+                  </button>
+
+                  {typeof navigator.share === "function" && (
+                    <button
+                      type="button"
+                      onClick={nativeShareCollection}
+                    >
+                      Share…
+                    </button>
+                  )}
+
+                  <a
+                    href={shareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Preview
+                  </a>
+
+                  <button
+                    type="button"
+                    className="cit-collections-stop-share"
+                    onClick={stopSharingCollection}
+                    disabled={shareRevoking}
+                  >
+                    {shareRevoking ? "Stopping…" : "Stop sharing"}
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
       )}
 
       {detailFilm && (
@@ -726,6 +936,12 @@ const styles = `
     gap: 8px;
   }
 
+  .cit-collection-actions .cit-collections-share {
+    border-color: #123b2d;
+    background: #123b2d;
+    color: #fff;
+  }
+
   .cit-collection-actions .cit-collections-danger {
     border-color: #efd3d3;
     color: #8f2f35;
@@ -893,6 +1109,73 @@ const styles = `
   .cit-collections-modal input:focus {
     border-color: #758f82;
     box-shadow: 0 0 0 3px rgba(18,59,45,.06);
+  }
+
+  .cit-collections-share-modal {
+    width: min(100%, 520px);
+  }
+
+  .cit-collections-share-copy {
+    margin: -5px 0 16px;
+    color: #66736c;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .cit-collections-share-link {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid #d9d2c8;
+    border-radius: 10px;
+    background: #fff;
+    color: #344940;
+    font: inherit;
+    font-size: 12px;
+  }
+
+  .cit-collections-share-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .cit-collections-share-actions button,
+  .cit-collections-share-actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    border: 1px solid #d9d2c8;
+    border-radius: 10px;
+    background: #fff;
+    color: #173f31;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .cit-collections-share-actions .cit-collections-primary {
+    border-color: #123b2d;
+    background: #123b2d;
+    color: #fff;
+  }
+
+  .cit-collections-share-actions .cit-collections-stop-share {
+    border-color: #efd3d3;
+    background: #fffafa;
+    color: #8f2f35;
+  }
+
+  .cit-collections-share-actions .cit-collections-stop-share:disabled {
+    opacity: .55;
+    cursor: default;
   }
 
   @media (max-width: 720px) {
