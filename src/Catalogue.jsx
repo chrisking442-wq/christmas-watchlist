@@ -172,31 +172,184 @@ function formatCheckedAt(value) {
   })}`;
 }
 
-function ProviderBadges({ providers, max = 2, compact = false }) {
+function isMobileBrowser() {
+  if (typeof navigator === "undefined") return false;
+
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+}
+
+function providerOpenUrl(providerName, filmTitle) {
+  const name = normaliseProviderName(providerName || "");
+  const title = (filmTitle || "").trim();
+
+  if (name === "Netflix" && title) {
+    return `https://www.netflix.com/search?q=${encodeURIComponent(title)}`;
+  }
+
+  if (name === "Disney+") {
+    return "https://www.disneyplus.com/en-gb/browse/search";
+  }
+
+  if (name === "Prime Video" && title) {
+    return `https://www.primevideo.com/search/?phrase=${encodeURIComponent(title)}`;
+  }
+
+  return "";
+}
+
+const WATCHMODE_LINK_CACHE = new Map();
+
+async function getExactWatchmodeUrl(
+  supabase,
+  tmdbId,
+  providerName
+) {
+  if (!supabase || !tmdbId || !providerName) return "";
+
+  const cacheKey = `${tmdbId}__${providerName}`;
+  if (WATCHMODE_LINK_CACHE.has(cacheKey)) {
+    return WATCHMODE_LINK_CACHE.get(cacheKey);
+  }
+
+  const { data, error } = await supabase.functions.invoke(
+    "watchmode-title-link",
+    {
+      body: {
+        tmdbId,
+        provider: providerName,
+        region: "GB",
+      },
+    }
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  const url = data?.url || "";
+  WATCHMODE_LINK_CACHE.set(cacheKey, url);
+
+  return url;
+}
+
+function ProviderBadges({
+  providers,
+  max = 2,
+  compact = false,
+  filmTitle = "",
+  filmTmdbId = null,
+  enableAppLinks = false,
+  supabase = null,
+}) {
   const visible = uniqueProviders(providers).slice(0, max);
 
   if (!visible.length) return null;
 
   return (
     <div className="cit-provider-row">
-      {visible.map((provider) => (
-        <span
-          key={provider.provider_id || provider.provider_name}
-          className={`cit-provider-badge ${
-            compact ? "cit-provider-badge--compact" : ""
-          }`}
-        >
-          {provider.logo_path ? (
-            <img
-              src={`${TMDB_IMG}/w45${provider.logo_path}`}
-              alt=""
-              aria-hidden="true"
-            />
-          ) : null}
+      {visible.map((provider) => {
+        const providerName = normaliseProviderName(provider.provider_name);
+        const openUrl = enableAppLinks
+          ? providerOpenUrl(providerName, filmTitle)
+          : "";
 
-          <span>{normaliseProviderName(provider.provider_name)}</span>
-        </span>
-      ))}
+        const contents = (
+          <>
+            {provider.logo_path ? (
+              <img
+                src={`${TMDB_IMG}/w45${provider.logo_path}`}
+                alt=""
+                aria-hidden="true"
+              />
+            ) : null}
+
+            <span>{providerName}</span>
+
+            {openUrl ? (
+              <span className="cit-provider-open-mark" aria-hidden="true">
+                ↗
+              </span>
+            ) : null}
+          </>
+        );
+
+        if (openUrl) {
+          return (
+            <a
+              key={provider.provider_id || provider.provider_name}
+              className={`cit-provider-badge cit-provider-badge--link ${
+                compact ? "cit-provider-badge--compact" : ""
+              }`}
+              href={openUrl}
+              title={`Open ${providerName} for ${filmTitle}`}
+              onClick={async (event) => {
+                const useExactNetflixLink =
+                  providerName === "Netflix" &&
+                  supabase &&
+                  filmTmdbId;
+
+                if (useExactNetflixLink) {
+                  event.preventDefault();
+
+                  // Exact title links are resolved by a Supabase Edge
+                  // Function so the Watchmode API key stays server-side.
+                  try {
+                    const exactUrl = await getExactWatchmodeUrl(
+                      supabase,
+                      filmTmdbId,
+                      providerName
+                    );
+
+                    const targetUrl = exactUrl || openUrl;
+
+                    if (isMobileBrowser()) {
+                      window.location.assign(targetUrl);
+                    } else {
+                      window.open(
+                        targetUrl,
+                        "_blank",
+                        "noopener,noreferrer"
+                      );
+                    }
+                  } catch (error) {
+                    console.error("Watchmode exact-link lookup failed:", error);
+
+                    if (isMobileBrowser()) {
+                      window.location.assign(openUrl);
+                    } else {
+                      window.open(
+                        openUrl,
+                        "_blank",
+                        "noopener,noreferrer"
+                      );
+                    }
+                  }
+
+                  return;
+                }
+
+                if (!isMobileBrowser()) {
+                  event.preventDefault();
+                  window.open(openUrl, "_blank", "noopener,noreferrer");
+                }
+              }}
+            >
+              {contents}
+            </a>
+          );
+        }
+
+        return (
+          <span
+            key={provider.provider_id || provider.provider_name}
+            className={`cit-provider-badge ${
+              compact ? "cit-provider-badge--compact" : ""
+            }`}
+          >
+            {contents}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -1815,6 +1968,27 @@ export default function Catalogue({
           white-space: nowrap;
         }
 
+        .cit-provider-badge--link {
+          color: inherit;
+          text-decoration: none;
+          cursor: pointer;
+          transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+        }
+
+        .cit-provider-badge--link:hover {
+          transform: translateY(-1px);
+          border-color: rgba(18, 59, 45, .28);
+          box-shadow: 0 4px 10px rgba(18, 59, 45, .08);
+        }
+
+        .cit-provider-open-mark {
+          flex: 0 0 auto;
+          margin-left: 1px;
+          opacity: .58;
+          font-size: 10px;
+          line-height: 1;
+        }
+
         .cit-not-streaming {
           color: #868d89;
           font-size: 11px;
@@ -3369,6 +3543,10 @@ export default function Catalogue({
                             <ProviderBadges
                               providers={subscriptionProviders}
                               max={12}
+                              filmTitle={selectedFilm.title}
+                              filmTmdbId={selectedFilm.tmdb_id}
+                              enableAppLinks
+                              supabase={supabase}
                             />
                           </div>
                         )}
@@ -3381,6 +3559,10 @@ export default function Catalogue({
                             <ProviderBadges
                               providers={freeProviders}
                               max={12}
+                              filmTitle={selectedFilm.title}
+                              filmTmdbId={selectedFilm.tmdb_id}
+                              enableAppLinks
+                              supabase={supabase}
                             />
                           </div>
                         )}
@@ -3393,6 +3575,10 @@ export default function Catalogue({
                             <ProviderBadges
                               providers={adProviders}
                               max={12}
+                              filmTitle={selectedFilm.title}
+                              filmTmdbId={selectedFilm.tmdb_id}
+                              enableAppLinks
+                              supabase={supabase}
                             />
                           </div>
                         )}
