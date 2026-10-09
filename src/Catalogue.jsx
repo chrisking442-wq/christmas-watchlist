@@ -181,9 +181,16 @@ function isMobileBrowser() {
 function providerOpenUrl(providerName, filmTitle) {
   const name = normaliseProviderName(providerName || "");
   const title = (filmTitle || "").trim();
+  const encodedTitle = encodeURIComponent(title);
+
+  // Prime Video add-on channels should fall back to Prime Video rather
+  // than the standalone service if Watchmode cannot supply an exact URL.
+  if (name.endsWith("(Prime Video Channel)") && title) {
+    return `https://www.primevideo.com/search/?phrase=${encodedTitle}`;
+  }
 
   if (name === "Netflix" && title) {
-    return `https://www.netflix.com/search?q=${encodeURIComponent(title)}`;
+    return `https://www.netflix.com/search?q=${encodedTitle}`;
   }
 
   if (name === "Disney+") {
@@ -191,7 +198,67 @@ function providerOpenUrl(providerName, filmTitle) {
   }
 
   if (name === "Prime Video" && title) {
-    return `https://www.primevideo.com/search/?phrase=${encodeURIComponent(title)}`;
+    return `https://www.primevideo.com/search/?phrase=${encodedTitle}`;
+  }
+
+  if (name === "Apple TV" && title) {
+    return `https://tv.apple.com/gb/search?term=${encodedTitle}`;
+  }
+
+  if (name === "Paramount+") {
+    return "https://www.paramountplus.com/gb/";
+  }
+
+  if (name === "NOW") {
+    return "https://www.nowtv.com/";
+  }
+
+  if (name === "Sky Go") {
+    return "https://www.sky.com/watch/sky-go";
+  }
+
+  if (name === "BBC iPlayer" && title) {
+    return `https://www.bbc.co.uk/iplayer/search?q=${encodedTitle}`;
+  }
+
+  if (name === "ITVX") {
+    return "https://www.itv.com/watch";
+  }
+
+  if (name === "Channel 4" || name === "All 4") {
+    return "https://www.channel4.com/";
+  }
+
+  if (name === "My5" || name === "Channel 5") {
+    return "https://www.channel5.com/";
+  }
+
+  if (name === "UKTV Play") {
+    return "https://u.co.uk/";
+  }
+
+  if (name === "Virgin TV Go") {
+    return "https://virgintvgo.virginmedia.com/";
+  }
+
+  if (name === "Hayu") {
+    return "https://www.hayu.com/";
+  }
+
+  if (name === "Sky Store") {
+    return "https://www.skystore.com/";
+  }
+
+  if (name === "YouTube" && title) {
+    return `https://www.youtube.com/results?search_query=${encodedTitle}`;
+  }
+
+  if (name === "Google Play Movies" && title) {
+    return `https://play.google.com/store/search?q=${encodedTitle}&c=movies`;
+  }
+
+  if (name === "Amazon Video" && title) {
+    return `https://www.primevideo.com/search/?phrase=${encodedTitle}`;
   }
 
   return "";
@@ -284,18 +351,15 @@ function ProviderBadges({
               title={`Open ${providerName} for ${filmTitle}`}
               onClick={async (event) => {
                 const useExactProviderLink =
-                  (providerName === "Netflix" ||
-                    providerName === "Prime Video" ||
-                    providerName === "Disney+") &&
-                  supabase &&
-                  filmTmdbId;
+                  Boolean(supabase && filmTmdbId && providerName);
 
                 if (useExactProviderLink) {
                   event.preventDefault();
 
-                  // Exact Netflix / Prime Video / Disney+ title links are
+                  // Exact title links for supported UK providers are
                   // resolved by a Supabase Edge Function so the Watchmode API
-                  // key stays server-side.
+                  // key stays server-side. If Watchmode has no exact source,
+                  // the provider-specific fallback URL is used instead.
                   try {
                     const exactUrl = await getExactWatchmodeUrl(
                       supabase,

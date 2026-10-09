@@ -9,21 +9,106 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function normaliseProviderName(value: string) {
-  const name = (value || "").trim().toLowerCase();
+function clean(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  if (name.includes("netflix")) return "Netflix";
-  if (name.includes("disney")) return "Disney+";
-  if (name.includes("prime") || name.includes("amazon")) return "Prime Video";
+function canonicalProvider(value: string) {
+  const name = clean(value);
+  const compact = name.replace(/\s+/g, "");
 
-  return value || "";
+  // Prime Video add-on channels need to stay distinct from the
+  // provider's own app/service.
+  const isPrimeChannel =
+    compact.includes("amazonchannel") ||
+    compact.includes("primevideochannel");
+
+  if (isPrimeChannel) {
+    if (compact.includes("apple")) return "prime-channel:apple";
+    if (compact.includes("paramount")) return "prime-channel:paramount";
+    if (compact.includes("hayu")) return "prime-channel:hayu";
+    if (compact.includes("mgm")) return "prime-channel:mgm";
+    if (compact.includes("discovery")) return "prime-channel:discovery";
+    return `prime-channel:${name}`;
+  }
+
+  if (compact.includes("netflix")) return "netflix";
+  if (compact.includes("disney")) return "disney";
+  if (
+    compact.includes("amazonprime") ||
+    compact.includes("primevideo")
+  ) {
+    return "prime-video";
+  }
+
+  if (
+    compact.includes("appletv") ||
+    compact === "apple"
+  ) {
+    return "apple-tv";
+  }
+
+  if (compact.includes("paramount")) return "paramount";
+  if (
+    compact === "now" ||
+    compact.includes("nowtv") ||
+    compact.includes("nowcinema") ||
+    compact.includes("nowentertainment")
+  ) {
+    return "now";
+  }
+
+  if (compact.includes("skygo")) return "sky-go";
+  if (compact.includes("skystore")) return "sky-store";
+
+  if (
+    compact.includes("bbciplayer") ||
+    compact === "iplayer"
+  ) {
+    return "bbc-iplayer";
+  }
+
+  if (
+    compact.includes("itvx") ||
+    compact === "itv"
+  ) {
+    return "itvx";
+  }
+
+  if (
+    compact.includes("channel4") ||
+    compact.includes("all4")
+  ) {
+    return "channel-4";
+  }
+
+  if (
+    compact.includes("my5") ||
+    compact.includes("channel5")
+  ) {
+    return "my5";
+  }
+
+  if (compact.includes("uktvplay")) return "uktv-play";
+  if (compact.includes("virgintvgo")) return "virgin-tv-go";
+  if (compact.includes("hayu")) return "hayu";
+  if (compact.includes("youtube")) return "youtube";
+  if (compact.includes("googleplay")) return "google-play";
+
+  // Amazon Video is deliberately separate from Prime Video because it
+  // can represent a rent/buy store result rather than subscription.
+  if (compact.includes("amazonvideo")) return "amazon-video";
+
+  return name;
 }
 
 function providerMatches(requested: string, sourceName: string) {
-  return (
-    normaliseProviderName(requested).toLowerCase() ===
-    normaliseProviderName(sourceName).toLowerCase()
-  );
+  return canonicalProvider(requested) === canonicalProvider(sourceName);
 }
 
 serve(async (req) => {
@@ -105,8 +190,9 @@ serve(async (req) => {
       sub: 0,
       free: 1,
       tve: 2,
-      rent: 3,
-      buy: 4,
+      ads: 3,
+      rent: 4,
+      buy: 5,
     };
 
     const matches = (Array.isArray(sources) ? sources : [])
@@ -126,6 +212,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         url: best?.web_url || "",
+        requested_provider: provider,
+        matched_provider: best?.name || "",
         source: best
           ? {
               name: best.name || "",
