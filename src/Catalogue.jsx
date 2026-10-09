@@ -283,16 +283,19 @@ function ProviderBadges({
               href={openUrl}
               title={`Open ${providerName} for ${filmTitle}`}
               onClick={async (event) => {
-                const useExactNetflixLink =
-                  providerName === "Netflix" &&
+                const useExactProviderLink =
+                  (providerName === "Netflix" ||
+                    providerName === "Prime Video" ||
+                    providerName === "Disney+") &&
                   supabase &&
                   filmTmdbId;
 
-                if (useExactNetflixLink) {
+                if (useExactProviderLink) {
                   event.preventDefault();
 
-                  // Exact title links are resolved by a Supabase Edge
-                  // Function so the Watchmode API key stays server-side.
+                  // Exact Netflix / Prime Video / Disney+ title links are
+                  // resolved by a Supabase Edge Function so the Watchmode API
+                  // key stays server-side.
                   try {
                     const exactUrl = await getExactWatchmodeUrl(
                       supabase,
