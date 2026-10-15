@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import PlannerAddModal from "./PlannerAddModal";
 import CollectionAddModal from "./CollectionAddModal";
+import StreamingLinks from "./StreamingLinks";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -172,156 +173,19 @@ function formatCheckedAt(value) {
   })}`;
 }
 
-function isMobileBrowser() {
-  if (typeof navigator === "undefined") return false;
-
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-}
-
-function providerOpenUrl(providerName, filmTitle) {
-  const name = normaliseProviderName(providerName || "");
-  const title = (filmTitle || "").trim();
-  const encodedTitle = encodeURIComponent(title);
-
-  // Prime Video add-on channels should fall back to Prime Video rather
-  // than the standalone service if Watchmode cannot supply an exact URL.
-  if (name.endsWith("(Prime Video Channel)") && title) {
-    return `https://www.primevideo.com/search/?phrase=${encodedTitle}`;
-  }
-
-  if (name === "Netflix" && title) {
-    return `https://www.netflix.com/search?q=${encodedTitle}`;
-  }
-
-  if (name === "Disney+") {
-    return "https://www.disneyplus.com/en-gb/browse/search";
-  }
-
-  if (name === "Prime Video" && title) {
-    return `https://www.primevideo.com/search/?phrase=${encodedTitle}`;
-  }
-
-  if (name === "Apple TV" && title) {
-    return `https://tv.apple.com/gb/search?term=${encodedTitle}`;
-  }
-
-  if (name === "Paramount+") {
-    return "https://www.paramountplus.com/gb/";
-  }
-
-  if (name === "NOW") {
-    return "https://www.nowtv.com/";
-  }
-
-  if (name === "Sky Go") {
-    return "https://www.sky.com/watch/sky-go";
-  }
-
-  if (name === "BBC iPlayer" && title) {
-    return `https://www.bbc.co.uk/iplayer/search?q=${encodedTitle}`;
-  }
-
-  if (name === "ITVX") {
-    return "https://www.itv.com/watch";
-  }
-
-  if (name === "Channel 4" || name === "All 4") {
-    return "https://www.channel4.com/";
-  }
-
-  if (name === "My5" || name === "Channel 5") {
-    return "https://www.channel5.com/";
-  }
-
-  if (name === "UKTV Play") {
-    return "https://u.co.uk/";
-  }
-
-  if (name === "Virgin TV Go") {
-    return "https://virgintvgo.virginmedia.com/";
-  }
-
-  if (name === "Hayu") {
-    return "https://www.hayu.com/";
-  }
-
-  if (name === "Sky Store") {
-    return "https://www.skystore.com/";
-  }
-
-  if (name === "YouTube" && title) {
-    return `https://www.youtube.com/results?search_query=${encodedTitle}`;
-  }
-
-  if (name === "Google Play Movies" && title) {
-    return `https://play.google.com/store/search?q=${encodedTitle}&c=movies`;
-  }
-
-  if (name === "Amazon Video" && title) {
-    return `https://www.primevideo.com/search/?phrase=${encodedTitle}`;
-  }
-
-  return "";
-}
-
-const WATCHMODE_LINK_CACHE = new Map();
-
-async function getExactWatchmodeUrl(
-  supabase,
-  tmdbId,
-  providerName
-) {
-  if (!supabase || !tmdbId || !providerName) return "";
-
-  const cacheKey = `${tmdbId}__${providerName}`;
-  if (WATCHMODE_LINK_CACHE.has(cacheKey)) {
-    return WATCHMODE_LINK_CACHE.get(cacheKey);
-  }
-
-  const { data, error } = await supabase.functions.invoke(
-    "watchmode-title-link",
-    {
-      body: {
-        tmdbId,
-        provider: providerName,
-        region: "GB",
-      },
-    }
-  );
-
-  if (error) {
-    throw error;
-  }
-
-  const url = data?.url || "";
-  WATCHMODE_LINK_CACHE.set(cacheKey, url);
-
-  return url;
-}
-
-function ProviderBadges({
-  providers,
-  max = 2,
-  compact = false,
-  filmTitle = "",
-  filmTmdbId = null,
-  enableAppLinks = false,
-  supabase = null,
-}) {
+function ProviderBadges({ providers, max = 2, compact = false }) {
   const visible = uniqueProviders(providers).slice(0, max);
-
   if (!visible.length) return null;
 
   return (
     <div className="cit-provider-row">
       {visible.map((provider) => {
-        const providerName = normaliseProviderName(provider.provider_name);
-        const openUrl = enableAppLinks
-          ? providerOpenUrl(providerName, filmTitle)
-          : "";
-
-        const contents = (
-          <>
+        const name = normaliseProviderName(provider.provider_name);
+        return (
+          <span
+            key={provider.provider_id || provider.provider_name}
+            className={`cit-provider-badge ${compact ? "cit-provider-badge--compact" : ""}`}
+          >
             {provider.logo_path ? (
               <img
                 src={`${TMDB_IMG}/w45${provider.logo_path}`}
@@ -329,91 +193,7 @@ function ProviderBadges({
                 aria-hidden="true"
               />
             ) : null}
-
-            <span>{providerName}</span>
-
-            {openUrl ? (
-              <span className="cit-provider-open-mark" aria-hidden="true">
-                ↗
-              </span>
-            ) : null}
-          </>
-        );
-
-        if (openUrl) {
-          return (
-            <a
-              key={provider.provider_id || provider.provider_name}
-              className={`cit-provider-badge cit-provider-badge--link ${
-                compact ? "cit-provider-badge--compact" : ""
-              }`}
-              href={openUrl}
-              title={`Open ${providerName} for ${filmTitle}`}
-              onClick={async (event) => {
-                const useExactProviderLink =
-                  Boolean(supabase && filmTmdbId && providerName);
-
-                if (useExactProviderLink) {
-                  event.preventDefault();
-
-                  // Exact title links for supported UK providers are
-                  // resolved by a Supabase Edge Function so the Watchmode API
-                  // key stays server-side. If Watchmode has no exact source,
-                  // the provider-specific fallback URL is used instead.
-                  try {
-                    const exactUrl = await getExactWatchmodeUrl(
-                      supabase,
-                      filmTmdbId,
-                      providerName
-                    );
-
-                    const targetUrl = exactUrl || openUrl;
-
-                    if (isMobileBrowser()) {
-                      window.location.assign(targetUrl);
-                    } else {
-                      window.open(
-                        targetUrl,
-                        "_blank",
-                        "noopener,noreferrer"
-                      );
-                    }
-                  } catch (error) {
-                    console.error("Watchmode exact-link lookup failed:", error);
-
-                    if (isMobileBrowser()) {
-                      window.location.assign(openUrl);
-                    } else {
-                      window.open(
-                        openUrl,
-                        "_blank",
-                        "noopener,noreferrer"
-                      );
-                    }
-                  }
-
-                  return;
-                }
-
-                if (!isMobileBrowser()) {
-                  event.preventDefault();
-                  window.open(openUrl, "_blank", "noopener,noreferrer");
-                }
-              }}
-            >
-              {contents}
-            </a>
-          );
-        }
-
-        return (
-          <span
-            key={provider.provider_id || provider.provider_name}
-            className={`cit-provider-badge ${
-              compact ? "cit-provider-badge--compact" : ""
-            }`}
-          >
-            {contents}
+            <span>{name}</span>
           </span>
         );
       })}
@@ -3607,12 +3387,11 @@ export default function Catalogue({
                             <div className="cit-detail-provider-label">
                               Subscription
                             </div>
-                            <ProviderBadges
+                            <StreamingLinks
                               providers={subscriptionProviders}
                               max={12}
                               filmTitle={selectedFilm.title}
                               filmTmdbId={selectedFilm.tmdb_id}
-                              enableAppLinks
                               supabase={supabase}
                             />
                           </div>
@@ -3623,12 +3402,11 @@ export default function Catalogue({
                             <div className="cit-detail-provider-label">
                               Free
                             </div>
-                            <ProviderBadges
+                            <StreamingLinks
                               providers={freeProviders}
                               max={12}
                               filmTitle={selectedFilm.title}
                               filmTmdbId={selectedFilm.tmdb_id}
-                              enableAppLinks
                               supabase={supabase}
                             />
                           </div>
@@ -3639,12 +3417,11 @@ export default function Catalogue({
                             <div className="cit-detail-provider-label">
                               Free with ads
                             </div>
-                            <ProviderBadges
+                            <StreamingLinks
                               providers={adProviders}
                               max={12}
                               filmTitle={selectedFilm.title}
                               filmTmdbId={selectedFilm.tmdb_id}
-                              enableAppLinks
                               supabase={supabase}
                             />
                           </div>

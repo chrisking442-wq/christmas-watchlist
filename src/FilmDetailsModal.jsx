@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import PlannerAddModal from "./PlannerAddModal";
 import CollectionAddModal from "./CollectionAddModal";
+import StreamingLinks from "./StreamingLinks";
 
 const TMDB_IMG = "https://image.tmdb.org/t/p";
 const TMDB_KEY = import.meta.env.VITE_TMDB_API_KEY || "";
@@ -1569,8 +1570,11 @@ export default function FilmDetailsModal({
                       <div className="cit-shared-detail-provider-label">
                         Subscription
                       </div>
-                      <ProviderBadges
+                      <StreamingLinks
                         providers={availability.subscription}
+                        filmTitle={film.title}
+                        filmTmdbId={film.tmdb_id}
+                        supabase={supabase}
                       />
                     </div>
                   )}
@@ -1580,7 +1584,12 @@ export default function FilmDetailsModal({
                       <div className="cit-shared-detail-provider-label">
                         Free
                       </div>
-                      <ProviderBadges providers={availability.free} />
+                      <StreamingLinks
+                        providers={availability.free}
+                        filmTitle={film.title}
+                        filmTmdbId={film.tmdb_id}
+                        supabase={supabase}
+                      />
                     </div>
                   )}
 
@@ -1589,7 +1598,12 @@ export default function FilmDetailsModal({
                       <div className="cit-shared-detail-provider-label">
                         Free with ads
                       </div>
-                      <ProviderBadges providers={availability.ads} />
+                      <StreamingLinks
+                        providers={availability.ads}
+                        filmTitle={film.title}
+                        filmTmdbId={film.tmdb_id}
+                        supabase={supabase}
+                      />
                     </div>
                   )}
                 </>
