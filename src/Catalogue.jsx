@@ -692,128 +692,51 @@ export default function Catalogue({
   }
 
   async function refreshWatchProviders(film) {
-    if (!film?.tmdb_id || !TMDB_KEY) return;
-
-    if (loadingProviders.has(film.tmdb_id)) return;
-
-    setLoadingProviders((prev) => {
-      const next = new Set(prev);
-      next.add(film.tmdb_id);
-      return next;
-    });
-
-    setProviderErrors((prev) => ({
-      ...prev,
-      [film.tmdb_id]: "",
-    }));
-
-    try {
-      const response = await fetch(
-        `https://api.themoviedb.org/3/movie/${film.tmdb_id}/watch/providers?api_key=${TMDB_KEY}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`TMDB request failed (${response.status})`);
-      }
-
-      const data = await response.json();
-
-      const ukProviders = data?.results?.GB || {
-        flatrate: [],
-        free: [],
-        ads: [],
-        link: null,
-      };
-
-      const normalised = {
-        flatrate: uniqueProviders(
-          (ukProviders.flatrate || []).map((provider) => ({
-            ...provider,
-            provider_name: normaliseProviderName(provider.provider_name),
-          }))
-        ),
-        free: uniqueProviders(
-          (ukProviders.free || []).map((provider) => ({
-            ...provider,
-            provider_name: normaliseProviderName(provider.provider_name),
-          }))
-        ),
-        ads: uniqueProviders(
-          (ukProviders.ads || []).map((provider) => ({
-            ...provider,
-            provider_name: normaliseProviderName(provider.provider_name),
-          }))
-        ),
-        link: ukProviders.link || null,
-      };
-
-      const nowIso = new Date().toISOString();
-
-      setWatchProviders((prev) => ({
-        ...prev,
-        [film.tmdb_id]: normalised,
-      }));
-
-      setAvailabilityCheckedAt((prev) => ({
-        ...prev,
-        [film.tmdb_id]: nowIso,
-      }));
-
+    if (!film?.id || !supabase || loadingProviders.has(film.tmdb_id)) return;
+    if (!session?.user) {
+      setProviderErrors((prev) => ({ ...prev, [film.tmdb_id]:
+        "Sign in to refresh UK availability. Existing results remain available." }));
       toggleExpanded(film.tmdb_id, true);
+      return;
+    }
 
-      const providerRows = [
-        ...normalised.flatrate.map((provider) => ({
-          provider_id: provider.provider_id ?? null,
-          provider_name: provider.provider_name,
-          provider_type: "subscription",
-          logo_path: provider.logo_path || null,
-          watch_url: normalised.link || null,
-        })),
-        ...normalised.free.map((provider) => ({
-          provider_id: provider.provider_id ?? null,
-          provider_name: provider.provider_name,
-          provider_type: "free",
-          logo_path: provider.logo_path || null,
-          watch_url: normalised.link || null,
-        })),
-        ...normalised.ads.map((provider) => ({
-          provider_id: provider.provider_id ?? null,
-          provider_name: provider.provider_name,
-          provider_type: "ads",
-          logo_path: provider.logo_path || null,
-          watch_url: normalised.link || null,
-        })),
-      ];
-
-      const { error: cacheError } = await supabase.rpc(
-        "v2_replace_streaming_availability",
-        {
-          p_film_id: film.id,
-          p_providers: providerRows,
-        }
+    setLoadingProviders((prev) => new Set(prev).add(film.tmdb_id));
+    setProviderErrors((prev) => ({ ...prev, [film.tmdb_id]: "" }));
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "refresh-film-availability", { body: { film_id: film.id } }
       );
-
-      if (cacheError) {
-        console.warn(
-          "Availability loaded, but couldn't cache it:",
-          cacheError
-        );
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Availability refresh failed");
+      const rows = data.providers || [];
+      const normalised = {
+        flatrate: [], free: [], ads: [], link: null,
+      };
+      for (const row of rows) {
+        if (row.provider_type === "none") continue;
+        const provider = {
+          provider_id: row.provider_id,
+          provider_name: normaliseProviderName(row.provider_name),
+          logo_path: row.logo_path,
+        };
+        if (row.provider_type === "subscription") normalised.flatrate.push(provider);
+        else if (row.provider_type === "free") normalised.free.push(provider);
+        else if (row.provider_type === "ads") normalised.ads.push(provider);
+        if (!normalised.link && row.watch_url) normalised.link = row.watch_url;
       }
-    } catch (providerError) {
-      console.error("Failed to load UK providers:", providerError);
-
-      setProviderErrors((prev) => ({
-        ...prev,
-        [film.tmdb_id]:
-          "Couldn't refresh UK availability right now.",
+      setWatchProviders((prev) => ({ ...prev, [film.tmdb_id]: normalised }));
+      setAvailabilityCheckedAt((prev) => ({
+        ...prev, [film.tmdb_id]: data.checked_at || new Date().toISOString(),
       }));
-
+      toggleExpanded(film.tmdb_id, true);
+    } catch (error) {
+      console.error("Failed to refresh UK providers:", error);
+      setProviderErrors((prev) => ({ ...prev, [film.tmdb_id]:
+        "Couldn't refresh UK availability right now." }));
       toggleExpanded(film.tmdb_id, true);
     } finally {
       setLoadingProviders((prev) => {
-        const next = new Set(prev);
-        next.delete(film.tmdb_id);
-        return next;
+        const next = new Set(prev); next.delete(film.tmdb_id); return next;
       });
     }
   }
@@ -2991,7 +2914,7 @@ export default function Catalogue({
                       type="button"
                       className="cit-watch-button"
                       onClick={() => handleWhereToWatch(film)}
-                      disabled={isLoadingProviders || !TMDB_KEY}
+                      disabled={isLoadingProviders}
                     >
                       {isLoadingProviders
                         ? "Checking UK availability…"
@@ -3495,7 +3418,7 @@ export default function Catalogue({
                         type="button"
                         className="cit-detail-refresh"
                         onClick={() => refreshWatchProviders(selectedFilm)}
-                        disabled={isRefreshing || !TMDB_KEY}
+                        disabled={isRefreshing}
                       >
                         {isRefreshing ? "Refreshing…" : "Refresh"}
                       </button>

@@ -611,92 +611,38 @@ export default function FilmDetailsModal({
   }
 
   async function refreshAvailability() {
-    if (!film?.tmdb_id || !TMDB_KEY) return;
-
+    if (!film?.id || !supabase || refreshingAvailability) return;
+    if (!session?.user) {
+      alert("Sign in to refresh UK availability. You can still browse cached results.");
+      return;
+    }
     setRefreshingAvailability(true);
-
     try {
-      const response = await fetch(
-        `https://api.themoviedb.org/3/movie/${film.tmdb_id}/watch/providers?api_key=${TMDB_KEY}`
+      const { data, error } = await supabase.functions.invoke(
+        "refresh-film-availability", { body: { film_id: film.id } }
       );
-
-      if (!response.ok) {
-        throw new Error(`TMDB request failed (${response.status})`);
-      }
-
-      const data = await response.json();
-
-      const gb = data?.results?.GB || {
-        flatrate: [],
-        free: [],
-        ads: [],
-        link: null,
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Availability refresh failed");
+      const next = {
+        subscription: [], free: [], ads: [], watchUrl: null,
+        checkedAt: data.checked_at || new Date().toISOString(), checked: true,
       };
-
-      const subscription = uniqueProviders(
-        (gb.flatrate || []).map((provider) => ({
-          provider_id: provider.provider_id ?? null,
-          provider_name: normaliseProviderName(provider.provider_name),
-          provider_type: "subscription",
-          logo_path: provider.logo_path || null,
-        }))
-      );
-
-      const free = uniqueProviders(
-        (gb.free || []).map((provider) => ({
-          provider_id: provider.provider_id ?? null,
-          provider_name: normaliseProviderName(provider.provider_name),
-          provider_type: "free",
-          logo_path: provider.logo_path || null,
-        }))
-      );
-
-      const ads = uniqueProviders(
-        (gb.ads || []).map((provider) => ({
-          provider_id: provider.provider_id ?? null,
-          provider_name: normaliseProviderName(provider.provider_name),
-          provider_type: "ads",
-          logo_path: provider.logo_path || null,
-        }))
-      );
-
-      const providerRows = [
-        ...subscription.map((provider) => ({
-          ...provider,
-          watch_url: gb.link || null,
-        })),
-        ...free.map((provider) => ({
-          ...provider,
-          watch_url: gb.link || null,
-        })),
-        ...ads.map((provider) => ({
-          ...provider,
-          watch_url: gb.link || null,
-        })),
-      ];
-
-      const { error: cacheError } = await supabase.rpc(
-        "v2_replace_streaming_availability",
-        {
-          p_film_id: film.id,
-          p_providers: providerRows,
-        }
-      );
-
-      if (cacheError) {
-        console.warn("Couldn't cache refreshed availability:", cacheError);
+      for (const row of data.providers || []) {
+        if (row.provider_type === "none") continue;
+        const provider = {
+          provider_id: row.provider_id,
+          provider_name: normaliseProviderName(row.provider_name),
+          provider_type: row.provider_type,
+          logo_path: row.logo_path,
+        };
+        if (row.provider_type === "subscription") next.subscription.push(provider);
+        else if (row.provider_type === "free") next.free.push(provider);
+        else if (row.provider_type === "ads") next.ads.push(provider);
+        if (!next.watchUrl && row.watch_url) next.watchUrl = row.watch_url;
       }
-
-      setAvailability({
-        subscription,
-        free,
-        ads,
-        watchUrl: gb.link || null,
-        checkedAt: new Date().toISOString(),
-        checked: true,
-      });
+      setAvailability(next);
     } catch (error) {
-      console.error(error);
+      console.error("Couldn't refresh UK availability:", error);
       alert("Couldn't refresh UK availability right now.");
     } finally {
       setRefreshingAvailability(false);

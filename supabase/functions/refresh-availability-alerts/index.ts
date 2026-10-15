@@ -1,4 +1,4 @@
-import { withSupabase } from "npm:@supabase/server@1";
+﻿import { withSupabase } from "npm:@supabase/server@1";
 
 const TMDB_KEY = Deno.env.get("TMDB_API_KEY") || "";
 const REQUEST_DELAY_MS = 120;
@@ -65,7 +65,7 @@ async function tmdbWatchProviders(tmdbId) {
 
 export default {
   fetch: withSupabase(
-    { auth: "secret:availability_cron" },
+    { auth: "secret:availability_cron_v2" },
     async (_req, ctx) => {
       try {
         const { data: alerts, error: alertsError } =
@@ -216,3 +216,4 @@ export default {
     }
   ),
 };
+
