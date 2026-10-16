@@ -65,43 +65,6 @@ function chunk(items, size) {
   return result;
 }
 
-function normaliseProviderName(name = "") {
-  const direct = {
-    "Amazon Prime Video": "Prime Video",
-    "Amazon Prime Video with Ads": "Prime Video",
-    "Netflix basic with Ads": "Netflix",
-    "Netflix Standard with Ads": "Netflix",
-    "Netflix Kids": "Netflix",
-    "Disney Plus": "Disney+",
-    "Paramount Plus": "Paramount+",
-    "Apple TV Plus": "Apple TV+",
-    "Sky Go": "Sky Go",
-    "Apple TV Amazon Channel": "Apple TV (Prime Video Channel)",
-  };
-
-  if (direct[name]) return direct[name];
-
-  if (name.endsWith(" Amazon Channel")) {
-    return `${name.replace(/ Amazon Channel$/, "")} (Prime Video Channel)`;
-  }
-
-  return name;
-}
-
-function uniqueProviders(providers = []) {
-  const seen = new Set();
-
-  return providers.filter((provider) => {
-    const key =
-      provider.provider_id ||
-      `${provider.provider_name || ""}__${provider.provider_type || ""}`;
-
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function filmYear(film) {
   const value = film?.release_date || "";
   return value ? Number(value.slice(0, 4)) || null : null;
@@ -692,7 +655,7 @@ export default function CatalogueAdmin({
   }
 
   async function refreshAvailability() {
-    if (!isAdmin || refreshingAvailability || !TMDB_KEY) return;
+    if (!isAdmin || refreshingAvailability) return;
 
     setRefreshingAvailability(true);
     setAvailabilityStatus("Loading included catalogue films…");
@@ -701,27 +664,22 @@ export default function CatalogueAdmin({
       const films = await getCatalogueFilms();
 
       if (!films.length) {
-        setAvailabilityStatus(
-          "No films are currently included in the catalogue."
-        );
+        setAvailabilityStatus("No films are currently included in the catalogue.");
         return;
       }
 
       const latestChecks = await getLatestAvailabilityChecks(
         films.map((film) => film.id)
       );
-
       const filmsToRefresh = films.filter(
         (film) => !isFresh(latestChecks.get(String(film.id)))
       );
-
       const skippedFresh = films.length - filmsToRefresh.length;
 
       if (!filmsToRefresh.length) {
         setAvailabilityStatus(
           `UK availability is already fresh for all ${films.length} included films.`
         );
-
         onCatalogueUpdated?.();
         return;
       }
@@ -729,71 +687,26 @@ export default function CatalogueAdmin({
       let saved = 0;
       let failed = 0;
 
+      // Only film IDs are sent. The server independently fetches trusted
+      // TMDB availability and updates the cache; the browser cannot supply providers.
       for (let i = 0; i < filmsToRefresh.length; i++) {
         const film = filmsToRefresh[i];
-
         setAvailabilityStatus(
-          `Refreshing UK availability… ${i + 1} of ${
-            filmsToRefresh.length
-          } (${film.title})`
+          `Refreshing UK availability… ${i + 1} of ${filmsToRefresh.length} (${film.title})`
         );
 
         try {
-          const data = await tmdb(
-            `/movie/${film.tmdb_id}/watch/providers`
+          const { data, error } = await supabase.functions.invoke(
+            "refresh-film-availability",
+            { body: { film_id: film.id } }
           );
-
-          const gb = data?.results?.GB || {};
-
-          const rows = uniqueProviders([
-            ...(gb.flatrate || []).map((provider) => ({
-              provider_id: provider.provider_id ?? null,
-              provider_name: normaliseProviderName(
-                provider.provider_name
-              ),
-              provider_type: "subscription",
-              logo_path: provider.logo_path || null,
-              watch_url: gb.link || null,
-            })),
-
-            ...(gb.free || []).map((provider) => ({
-              provider_id: provider.provider_id ?? null,
-              provider_name: normaliseProviderName(
-                provider.provider_name
-              ),
-              provider_type: "free",
-              logo_path: provider.logo_path || null,
-              watch_url: gb.link || null,
-            })),
-
-            ...(gb.ads || []).map((provider) => ({
-              provider_id: provider.provider_id ?? null,
-              provider_name: normaliseProviderName(
-                provider.provider_name
-              ),
-              provider_type: "ads",
-              logo_path: provider.logo_path || null,
-              watch_url: gb.link || null,
-            })),
-          ]);
-
-          const { error: saveError } = await supabase.rpc(
-            "v2_replace_streaming_availability",
-            {
-              p_film_id: film.id,
-              p_providers: rows,
-            }
-          );
-
-          if (saveError) throw saveError;
-
+          if (error) throw error;
+          if (!data?.ok) {
+            throw new Error(data?.error || "Refresh was not successful");
+          }
           saved += 1;
         } catch (filmError) {
-          console.error(
-            "Availability refresh failed:",
-            film.title,
-            filmError
-          );
+          console.error("Availability refresh failed:", film.title, filmError);
           failed += 1;
         }
 
@@ -807,13 +720,10 @@ export default function CatalogueAdmin({
           skippedFresh ? `, ${skippedFresh} already fresh` : ""
         }${failed ? `, ${failed} failed` : ""}.`
       );
-
       onCatalogueUpdated?.();
     } catch (error) {
       console.error(error);
-      setAvailabilityStatus(
-        `Availability refresh failed: ${error.message}`
-      );
+      setAvailabilityStatus(`Availability refresh failed: ${error.message}`);
     } finally {
       setRefreshingAvailability(false);
     }
